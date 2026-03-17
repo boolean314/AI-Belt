@@ -211,7 +211,7 @@
                     app:cpb_selectorComplete="@drawable/success_state_selector"
                     app:cpb_selectorError="@drawable/failed_state_selector"
                     app:cpb_selectorIdle="@drawable/init_state_selector"
-                    app:cpb_textIdle="登录"
+                    app:cpb_textIdle="注册"
                     app:layout_constraintEnd_toEndOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toBottomOf="@id/register_phone_layout" />
