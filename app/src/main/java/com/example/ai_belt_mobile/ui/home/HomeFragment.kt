@@ -17,23 +17,23 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 class HomeFragment : BaseFragment<FragmentHomeBinding>() {
-    
+
     override val layoutId: Int = R.layout.fragment_home
-    
+
     private lateinit var viewModel: HomeViewModel
     private val scope = CoroutineScope(Dispatchers.Main + Job())
-    
+
     override fun initView() {
         super.initView()
         viewModel = ViewModelProvider(this)[HomeViewModel::class.java]
         binding.viewModel = viewModel
-        
+
         // 初始化语音按钮长按事件
         binding.voiceInputButton.setOnLongClickListener {
             requestAudioPermission()
             true
         }
-        
+
         // 监听识别结果
         scope.launch {
             viewModel.recognitionResult.collect {
@@ -42,7 +42,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
             }
         }
     }
-    
+
     private fun requestAudioPermission() {
         XXPermissions.with(requireActivity())
             .permission(PermissionLists.getRecordAudioPermission())
@@ -63,22 +63,22 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
                 }
             })
     }
-    
+
     private fun startVoiceRecognition() {
         // 开始语音识别
         viewModel.startVoiceRecognition()
-        
+
         // 设置按钮释放事件
         binding.voiceInputButton.setOnClickListener {
             stopVoiceRecognition()
         }
     }
-    
+
     private fun stopVoiceRecognition() {
         // 停止语音识别
         viewModel.stopVoiceRecognition()
     }
-    
+
     override fun onDestroyView() {
         super.onDestroyView()
         scope.cancel()
