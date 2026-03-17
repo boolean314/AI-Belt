@@ -22,7 +22,7 @@
         android:backgroundTint="#FF0000"
         android:contentDescription="紧急求助按钮"
         android:text="紧急求助"
-        android:textColor="#FFFF
+        android:textColor="#FFFFFF"
         android:textSize="24sp"
         android:textStyle="bold"
         app:layout_constraintLeft_toLeftOf="parent"
