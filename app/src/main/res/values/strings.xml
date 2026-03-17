@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Mini-Sentry</string>
+    <string name="app_name">AI-Belt</string>
     <string name="register_prompt">没有账号？<u>立即注册</u></string>
     <string name="forget_prompt"><u>忘记密码</u></string>
     <string name="login_prompt">账号已存在？<u>前往登录</u></string>
