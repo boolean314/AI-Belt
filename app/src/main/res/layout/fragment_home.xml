@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <data>
+        <variable
+            name="viewModel"
+            type="com.example.ai_belt_mobile.ui.home.HomeViewModel" />
+    </data>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
     <TextView
         android:id="@+id/Belt_status"
         android:layout_width="wrap_content"
@@ -12,37 +21,60 @@
         android:textStyle="bold"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent" />
+        app:layout_constraintRight_toRightOf="parent"
 
-    <Button
+        />
+
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/emergency_button"
-        android:layout_width="300dp"
-        android:layout_height="100dp"
+        android:layout_width="match_parent"
+        android:layout_height="150dp"
         android:layout_marginTop="64dp"
-        android:backgroundTint="#FF0000"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="20dp"
         android:contentDescription="紧急求助按钮"
-        android:text="紧急求助"
+        android:text="SOS"
         android:textColor="#FFFFFF"
-        android:textSize="24sp"
+        android:textSize="80sp"
         android:textStyle="bold"
+        app:backgroundTint="#FF0000"
+        app:cornerRadius="16dp"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/Belt_status" />
 
-    <Button
+        <TextView
+            android:id="@+id/recognition_result"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@{viewModel.text}"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toTopOf="@+id/voice_input_button"
+            app:layout_constraintLeft_toLeftOf="parent"
+            app:layout_constraintRight_toRightOf="parent" />
+
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/voice_input_button"
-        android:layout_width="match_parent"
-        android:layout_height="150dp"
-        android:layout_marginBottom="-20dp"
-        android:background="@drawable/semicircle_button"
+        android:layout_width="450dp"
+        android:layout_height="450dp"
+        android:layout_marginBottom="-300dp"
         android:contentDescription="语音输入按钮"
-        android:drawableTop="@android:drawable/ic_btn_speak_now"
         android:gravity="top|center_horizontal"
+        android:icon="@android:drawable/ic_btn_speak_now"
+        android:iconTint="#FFFFFF"
         android:text="语音输入"
         android:textColor="#FFFFFF"
-        android:textSize="16sp"
+        android:textSize="24sp"
+        app:backgroundTint="#2196F3"
+        app:cornerRadius="200dp"
+        app:iconSize="100dp"
+        app:iconGravity="top"
+        app:iconPadding="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
+
+</layout>

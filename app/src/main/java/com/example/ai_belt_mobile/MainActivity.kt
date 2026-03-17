@@ -64,9 +64,9 @@ class MainActivity : AppCompatActivity() {
         
         override fun createFragment(position: Int): Fragment {
             return when (position) {
-                0 -> HomeFragment()
-                1 -> ProfileFragment()
-                else -> HomeFragment()
+                0 -> HomeFragment() as Fragment
+                1 -> ProfileFragment() as Fragment
+                else -> HomeFragment() as Fragment
             }
         }
     }
