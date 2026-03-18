@@ -1,10 +1,12 @@
 package com.example.ai_belt_mobile.ui.home
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import android.view.MotionEvent
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContentProviderCompat.requireContext
@@ -33,6 +35,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
 
     override val layoutId: Int = R.layout.fragment_home
     private lateinit var viewModel: HomeViewModel
+    private val scope = CoroutineScope(Dispatchers.Main + Job())
 
     // region BLE模块 - 字段
     private lateinit var cardConnectStatus: MaterialCardView
@@ -61,23 +64,34 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     }
 
     // region 语音模块
+    @SuppressLint("ClickableViewAccessibility")
     private fun initVoiceView() {
-        binding.voiceInputButton.setOnLongClickListener {
-            requestAudioPermission()
-            true
-        }
-
-        binding.voiceInputButton.setOnClickListener {
-            viewModel.stopVoiceRecognition()
+        binding.voiceInputButton.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    // 按下时请求权限并开始识别
+                    requestAudioPermission()
+                    showVoiceInputPopup()
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // 抬起或取消时停止识别
+                    viewModel.stopVoiceRecognition()
+                    hideVoiceInputPopup()
+                    true
+                }
+                else -> false
+            }
         }
     }
 
     private fun observeVoiceState() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.recognitionResult.collect { result ->
-                    Log.d("HomeFragment", "Recognition result: $result")
-                }
+        // 监听识别结果
+        scope.launch {
+            viewModel.recognitionResult.collect {
+                // 这里可以更新UI显示识别结果
+                if(it.contains("识别出错"))
+                showToast(it)
             }
         }
     }
@@ -188,5 +202,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     override fun onDestroyView() {
         viewModel.stopScan()
         super.onDestroyView()
+        scope.cancel()
     }
 }
