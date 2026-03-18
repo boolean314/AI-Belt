@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai_belt_mobile.ble.BleManager
+import com.example.ai_belt_mobile.network.RetrofitClient
 import com.example.ai_belt_mobile.utils.AudioRecorderManager
 import com.iflytek.sparkchain.core.asr.ASR
 import com.iflytek.sparkchain.core.asr.AsrCallbacks
@@ -29,10 +30,7 @@ sealed interface HomeBleState {
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     // region 语音模块 - 状态与字段
-    private val _isRecording = MutableStateFlow(false)
-    val isRecording: StateFlow<Boolean> = _isRecording
-
-    private val _recognitionResult = MutableStateFlow("\n")
+    private val _recognitionResult = MutableStateFlow("")
     val recognitionResult: StateFlow<String> = _recognitionResult
 
     private val _text = MutableStateFlow<String?>(null)
@@ -40,7 +38,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     private var asr: ASR? = null
     private var audioRecorderManager: AudioRecorderManager? = null
+    
+    @Volatile
     private var isRunning = false
+
     // endregion
 
     // region BLE模块 - 状态与字段
@@ -58,118 +59,142 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val targetMac = "68:25:DD:C3:07:22"
     // endregion
 
-    init {
-        initVoiceModule()
-    }
-
     // region 语音模块 - API
     private fun initVoiceModule() {
         if (asr != null) return
 
-        asr = ASR()
-        asr?.registerCallbacks(object : AsrCallbacks {
-            override fun onResult(asrResult: ASR.ASRResult, o: Any?) {
-                val status = asrResult.status
-                val result = asrResult.bestMatchText
+        try {
+            Log.d("HomeViewModel", "初始化ASR")
+            asr = ASR()
+            asr?.registerCallbacks(object : AsrCallbacks {
+                override fun onResult(asrResult: ASR.ASRResult, o: Any?) {
+                    val status = asrResult.status
+                    val result = asrResult.bestMatchText
 
-                Log.d("HomeViewModel", "Recognition result: $result, status: $status")
+                    Log.d("HomeViewModel", "识别结果: $result, status: $status")
 
-                viewModelScope.launch(Dispatchers.Main) {
-                    _recognitionResult.value = "识别结果: $result\n"
-                    _text.value = result
+                    viewModelScope.launch(Dispatchers.Main) {
+                        _recognitionResult.value = "识别结果: $result\n"
+                        _text.value = result
+                    }
+                    
+                    if (status == 2) {
+                        isRunning = false
+                        //等ai那边对接
+                        /*viewModelScope.launch(Dispatchers.IO) {
+                            try {
+                                val response = RetrofitClient.aiService.sendRecognition(result)
+                                Log.d("HomeViewModel", "AI 响应: ${response.want}, ${response.toDo}, ${response.what}")
+
+                            } catch (e: Exception) {
+                                Log.e("HomeViewModel", "向ai请求失败", e)
+                            }
+                        }
+                        */
+
+
+                    }
                 }
 
-                if (status == 2) {
-                    stopVoiceRecognition()
-                }
-            }
-
-            override fun onError(asrError: ASR.ASRError, o: Any?) {
-                val errorCode = asrError.code
-                val errorMsg = asrError.errMsg
-
-                Log.e("HomeViewModel", "Recognition error: $errorMsg, code: $errorCode")
-
-                viewModelScope.launch(Dispatchers.Main) {
-                    _recognitionResult.value = "识别出错: $errorMsg, 错误码: $errorCode\n"
+                override fun onError(asrError: ASR.ASRError, o: Any?) {
+                    val errorCode = asrError.code
+                    val errorMsg = asrError.errMsg
+                    Log.e("HomeViewModel", "Recognition error: $errorMsg, code: $errorCode")
+                    
+                    isRunning = false
+                    viewModelScope.launch(Dispatchers.Main) {
+                        _recognitionResult.value = "识别出错: $errorMsg, 错误码: $errorCode\n"
+                    }
                 }
 
-                stopVoiceRecognition()
-            }
+                override fun onBeginOfSpeech() {
+                    Log.d("HomeViewModel", "Begin of speech")
+                }
 
-            override fun onBeginOfSpeech() {
-                Log.d("HomeViewModel", "Begin of speech")
-            }
-
-            override fun onEndOfSpeech() {
-                Log.d("HomeViewModel", "End of speech")
-            }
-        })
+                override fun onEndOfSpeech() {
+                    Log.d("HomeViewModel", "End of speech")
+                }
+            })
+        } catch (e: Exception) {
+            Log.e("HomeViewModel", "Error initializing ASR module", e)
+            asr = null
+        }
     }
 
     fun startVoiceRecognition() {
         viewModelScope.launch(Dispatchers.IO) {
-            if (isRunning) return@launch
+            if (isRunning) {
+                Log.d("HomeViewModel", "此时isRunning已经是true，跳过启动")
+                return@launch
+            }
+            isRunning = true
 
+            // 重置资源
             asr = null
-            initVoiceModule()
+            audioRecorderManager = null
+            
+            try {
+                initVoiceModule()
+                asr?.apply {
+                    language("zh_cn")
+                    domain("slm")
+                    accent("mandarin")
+                    vinfo(true)
+                    dwa("wpgs")
+                }
+                
+                val ret = asr?.start("home_asr") ?: -1
+                if (ret != 0) throw Exception("ASR 启动失败: $ret")
 
-            asr?.apply {
-                language("zh_cn")
-                domain("iat")
-                accent("mandarin")
-                vinfo(true)
-                dwa("wpgs")
-
-                val ret = start(System.currentTimeMillis().toString())
-                if (ret == 0) {
-                    isRunning = true
-
-                    audioRecorderManager = AudioRecorderManager.getInstance()
-                    audioRecorderManager?.registerCallBack(object : AudioRecorderManager.AudioDataCallback {
-                        override fun onAudioData(data: ByteArray, size: Int) {
-                            writeAudioData(data)
-                        }
-
-                        override fun onAudioVolume(db: Double, volume: Int) {
-                            // no-op
-                        }
-                    })
-                    audioRecorderManager?.startRecord()
-
-                    withContext(Dispatchers.Main) {
-                        _isRecording.value = true
-                        _recognitionResult.value = "正在识别...\n"
-                        _text.value = null
+                Log.d("HomeViewModel", "ASR 成功启动")
+                        
+                audioRecorderManager = AudioRecorderManager.getInstance()
+                audioRecorderManager?.registerCallBack(object : AudioRecorderManager.AudioDataCallback {
+                    override fun onAudioData(data: ByteArray, size: Int) {
+                        asr?.write(data)
                     }
-                } else {
-                    withContext(Dispatchers.Main) {
-                        _recognitionResult.value = "识别开启失败，错误码: $ret\n"
-                    }
+                    override fun onAudioVolume(db: Double, volume: Int) {}
+                })
+                
+                audioRecorderManager?.startRecord()
+                Log.d("HomeViewModel", "开始录音识别")
+
+                withContext(Dispatchers.Main) {
+                    _recognitionResult.value = "正在识别...\n"
+                    _text.value = null
+                }
+
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Error in startVoiceRecognition", e)
+                isRunning = false
+                withContext(Dispatchers.Main) {
+                    _recognitionResult.value = "识别开启失败：${e.message}\n"
                 }
             }
         }
     }
 
     fun stopVoiceRecognition() {
+        isRunning = false
+        Log.d("HomeViewModel", "停止识别流程")
+
         viewModelScope.launch(Dispatchers.IO) {
-            if (!isRunning) return@launch
+            try {
+                // 1. 停止录音
+                audioRecorderManager?.stopRecord()
+                audioRecorderManager = null
+                Log.d("HomeViewModel", "录音已停止")
 
-            audioRecorderManager?.stopRecord()
-            audioRecorderManager = null
+                // 2. 通知云端停止
+                asr?.stop(false)
+                Log.d("HomeViewModel", "ASR 已停止信号已发送")
 
-            asr?.stop(false)
-            isRunning = false
-
-            withContext(Dispatchers.Main) {
-                _isRecording.value = false
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Error in stopVoiceRecognition", e)
+            } finally {
+                asr = null
+                audioRecorderManager = null
             }
-        }
-    }
-
-    private fun writeAudioData(data: ByteArray) {
-        if (isRunning) {
-            asr?.write(data)
         }
     }
     // endregion
@@ -205,8 +230,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    @SuppressLint("MissingPermission")
     fun startScan() = bleManager.startScan()
-
+    @SuppressLint("MissingPermission")
     fun stopScan() = bleManager.stopScan()
 
     @SuppressLint("MissingPermission")
@@ -225,7 +251,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun parseBattery(bytes: ByteArray): Int? {
         val text = bytes.toString(Charsets.UTF_8).trim()
-
         Regex("(?i)(?:BAT|BATT|BATTERY)\\s*[:=]\\s*(\\d{1,3})")
             .find(text)
             ?.groupValues
@@ -234,12 +259,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             ?.let { return it.coerceIn(0, 100) }
 
         text.toIntOrNull()?.let { return it.coerceIn(0, 100) }
-
         if (bytes.size == 1) {
             val value = bytes[0].toInt() and 0xFF
             if (value in 0..100) return value
         }
-
         return null
     }
 
@@ -254,16 +277,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     // endregion
 
     override fun onCleared() {
-        // region 语音模块 - 资源释放
         audioRecorderManager?.stopRecord()
         asr?.stop(true)
         asr = null
-        // endregion
-
-        // region BLE模块 - 资源释放
         bleManager.disconnect()
-        // endregion
 
         super.onCleared()
     }
+    
+
+
 }

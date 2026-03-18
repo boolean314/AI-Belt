@@ -2,6 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission
@@ -25,6 +26,7 @@
         android:maxSdkVersion="30" />
 
     <application
+        android:usesCleartextTraffic="true"
         android:name=".AI_Belt_Application"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
