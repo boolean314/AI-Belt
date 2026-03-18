@@ -37,6 +37,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     // region BLE模块 - 字段
     private lateinit var cardConnectStatus: MaterialCardView
     private lateinit var tvConnectStatus: TextView
+    private var scanTimeoutJob: kotlinx.coroutines.Job? = null
 
     private val blePermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -128,7 +129,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                         is HomeBleState.Connecting -> "连接中：${state.name}"
                         is HomeBleState.Connected -> {
                             val batteryText = state.battery?.let { "$it%" } ?: "--%"
-                            "已连接：${state.name}  电量：$batteryText"
+                            "剩余电量：$batteryText"
                         }
                         is HomeBleState.Error -> "连接异常：${state.msg}"
                     }
@@ -173,7 +174,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     private fun showScanDialog() {
         if (childFragmentManager.findFragmentByTag(DeviceScanDialogFragment.TAG) != null) return
         DeviceScanDialogFragment().show(childFragmentManager, DeviceScanDialogFragment.TAG)
-        viewModel.startScan()
+        startScanWithTimeout()
     }
 
     override fun onDeviceChosen(device: BluetoothDevice) {
@@ -182,11 +183,35 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
 
     override fun onDialogClosed() {
         viewModel.stopScan()
+        scanTimeoutJob?.cancel()
+        scanTimeoutJob = null
     }
-    // endregion
+
+    override fun onRefreshRequested() {
+        viewModel.stopScan()
+        startScanWithTimeout()
+    }
+
+    private fun startScanWithTimeout() {
+        viewModel.stopScan()
+        viewModel.startScan()
+
+        (childFragmentManager.findFragmentByTag(DeviceScanDialogFragment.TAG) as? DeviceScanDialogFragment)
+            ?.setRefreshing(true)
+
+        scanTimeoutJob?.cancel()
+        scanTimeoutJob = viewLifecycleOwner.lifecycleScope.launch {
+            kotlinx.coroutines.delay(10_000L) // 10s
+            viewModel.stopScan()
+            (childFragmentManager.findFragmentByTag(DeviceScanDialogFragment.TAG) as? DeviceScanDialogFragment)
+                ?.setRefreshing(false)
+        }
+    }
 
     override fun onDestroyView() {
         viewModel.stopScan()
         super.onDestroyView()
     }
+
+    // endregion
 }

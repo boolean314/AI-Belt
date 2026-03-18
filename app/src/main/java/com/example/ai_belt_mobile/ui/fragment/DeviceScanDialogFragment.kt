@@ -13,10 +13,12 @@ import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.example.ai_belt_mobile.R
 import com.example.ai_belt_mobile.ui.adapter.DeviceScanAdapter
 import com.google.android.material.button.MaterialButton
 import kotlin.collections.containsKey
+import kotlin.text.clear
 import kotlin.text.set
 
 class DeviceScanDialogFragment : DialogFragment() {
@@ -24,10 +26,12 @@ class DeviceScanDialogFragment : DialogFragment() {
     interface Callbacks {
         fun onDeviceChosen(device: BluetoothDevice)
         fun onDialogClosed()
+        fun onRefreshRequested()
     }
 
     private val devices = linkedMapOf<String, BluetoothDevice>()
     private var adapter: DeviceScanAdapter? = null
+    private var swipeRefreshLayout: SwipeRefreshLayout? = null
 
     companion object {
         const val TAG = "DeviceScanDialogFragment"
@@ -40,6 +44,8 @@ class DeviceScanDialogFragment : DialogFragment() {
         val rvDevices = contentView.findViewById<RecyclerView>(R.id.rvDevices)
         val btnCancel = contentView.findViewById<MaterialButton>(R.id.btnCancel)
 
+        swipeRefreshLayout = contentView.findViewById(R.id.swipeRefreshDevices)
+
         adapter = DeviceScanAdapter { device ->
             (parentFragment as? Callbacks)?.onDeviceChosen(device)
             dismissAllowingStateLoss()
@@ -48,6 +54,11 @@ class DeviceScanDialogFragment : DialogFragment() {
         rvDevices.layoutManager = LinearLayoutManager(requireContext())
         rvDevices.adapter = adapter
         adapter?.submitDevices(devices.values.toList())
+
+        swipeRefreshLayout?.setOnRefreshListener {
+            clearDevices()
+            (parentFragment as? DeviceScanDialogFragment.Callbacks)?.onRefreshRequested()
+        }
 
         btnCancel.setOnClickListener { dismissAllowingStateLoss() }
 
@@ -73,6 +84,7 @@ class DeviceScanDialogFragment : DialogFragment() {
 
         devices[address] = device
         adapter?.addIfAbsent(device)
+        swipeRefreshLayout?.isRefreshing = false
     }
 
     private fun safeAddress(device: BluetoothDevice): String {
@@ -81,5 +93,14 @@ class DeviceScanDialogFragment : DialogFragment() {
         } catch (_: SecurityException) {
             ""
         }
+    }
+
+    private fun clearDevices() {
+        devices.clear()
+        adapter?.submitDevices(emptyList())
+    }
+
+    fun setRefreshing(refreshing: Boolean) {
+        swipeRefreshLayout?.isRefreshing = refreshing
     }
 }

@@ -54,6 +54,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val bleManager: BleManager by lazy {
         BleManager(getApplication<Application>().applicationContext, bleListener)
     }
+
+    private val targetMac = "68:25:DD:C3:07:22"
     // endregion
 
     init {
@@ -175,7 +177,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     // region BLE模块 - API
     private val bleListener = object : BleManager.Listener {
         override fun onScanFound(device: BluetoothDevice) {
-            _scanDeviceEvents.tryEmit(device)
+            val addr = try { device.address ?: "" } catch (_: SecurityException) { "" }
+            if (addr.equals(targetMac, ignoreCase = true)) {
+                _scanDeviceEvents.tryEmit(device)
+            }
         }
 
         override fun onConnected() {
