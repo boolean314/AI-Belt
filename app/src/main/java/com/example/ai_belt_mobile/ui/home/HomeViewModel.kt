@@ -1,19 +1,34 @@
 package com.example.ai_belt_mobile.ui.home
 
+import android.annotation.SuppressLint
+import android.app.Application
+import android.bluetooth.BluetoothDevice
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.ai_belt_mobile.ble.BleManager
 import com.example.ai_belt_mobile.utils.AudioRecorderManager
 import com.iflytek.sparkchain.core.asr.ASR
 import com.iflytek.sparkchain.core.asr.AsrCallbacks
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class HomeViewModel : ViewModel() {
+sealed interface HomeBleState {
+    data object Disconnected : HomeBleState
+    data class Connecting(val name: String) : HomeBleState
+    data class Connected(val name: String, val battery: Int?) : HomeBleState
+    data class Error(val msg: String) : HomeBleState
+}
 
+class HomeViewModel(app: Application) : AndroidViewModel(app) {
+
+    // region 语音模块 - 状态与字段
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording
 
@@ -26,66 +41,76 @@ class HomeViewModel : ViewModel() {
     private var asr: ASR? = null
     private var audioRecorderManager: AudioRecorderManager? = null
     private var isRunning = false
+    // endregion
+
+    // region BLE模块 - 状态与字段
+    private val _bleState = MutableStateFlow<HomeBleState>(HomeBleState.Disconnected)
+    val bleState = _bleState.asStateFlow()
+
+    private val _scanDeviceEvents = MutableSharedFlow<BluetoothDevice>(extraBufferCapacity = 32)
+    val scanDeviceEvents = _scanDeviceEvents.asSharedFlow()
+
+    private var currentDeviceName: String = "设备"
+    private val bleManager: BleManager by lazy {
+        BleManager(getApplication<Application>().applicationContext, bleListener)
+    }
+    // endregion
 
     init {
-        initASR()
+        initVoiceModule()
     }
 
-    private fun initASR() {
-        if (asr == null) {
-            asr = ASR()
-            asr?.registerCallbacks(object : AsrCallbacks {
-                override fun onResult(asrResult: ASR.ASRResult, o: Any?) {
-                    val status = asrResult.status
-                    val result = asrResult.bestMatchText
+    // region 语音模块 - API
+    private fun initVoiceModule() {
+        if (asr != null) return
 
-                    Log.d("HomeViewModel", "Recognition result: $result, status: $status")
+        asr = ASR()
+        asr?.registerCallbacks(object : AsrCallbacks {
+            override fun onResult(asrResult: ASR.ASRResult, o: Any?) {
+                val status = asrResult.status
+                val result = asrResult.bestMatchText
 
-                    viewModelScope.launch(Dispatchers.Main) {
-                        _recognitionResult.value = "识别结果: $result\n"
-                        _text.value = result
-                    }
+                Log.d("HomeViewModel", "Recognition result: $result, status: $status")
 
-                    if (status == 2) {
-                        // 识别结束
-                        stopVoiceRecognition()
-                    }
+                viewModelScope.launch(Dispatchers.Main) {
+                    _recognitionResult.value = "识别结果: $result\n"
+                    _text.value = result
                 }
 
-                override fun onError(asrError: ASR.ASRError, o: Any?) {
-                    val errorCode = asrError.code
-                    val errorMsg = asrError.errMsg
-
-                    Log.e("HomeViewModel", "Recognition error: $errorMsg, code: $errorCode")
-
-                    viewModelScope.launch(Dispatchers.Main) {
-                        _recognitionResult.value = "识别出错: $errorMsg, 错误码: $errorCode\n"
-                    }
-
+                if (status == 2) {
                     stopVoiceRecognition()
                 }
+            }
 
-                override fun onBeginOfSpeech() {
-                    Log.d("HomeViewModel", "Begin of speech")
+            override fun onError(asrError: ASR.ASRError, o: Any?) {
+                val errorCode = asrError.code
+                val errorMsg = asrError.errMsg
+
+                Log.e("HomeViewModel", "Recognition error: $errorMsg, code: $errorCode")
+
+                viewModelScope.launch(Dispatchers.Main) {
+                    _recognitionResult.value = "识别出错: $errorMsg, 错误码: $errorCode\n"
                 }
 
-                override fun onEndOfSpeech() {
-                    Log.d("HomeViewModel", "End of speech")
-                }
-            })
-        }
+                stopVoiceRecognition()
+            }
+
+            override fun onBeginOfSpeech() {
+                Log.d("HomeViewModel", "Begin of speech")
+            }
+
+            override fun onEndOfSpeech() {
+                Log.d("HomeViewModel", "End of speech")
+            }
+        })
     }
 
     fun startVoiceRecognition() {
         viewModelScope.launch(Dispatchers.IO) {
-            if (isRunning) {
-                Log.d("HomeViewModel", "Recognition is already running")
+            if (isRunning) return@launch
 
-            }
-
-            // 每次开始识别前重新初始化ASR，确保能多次识别
             asr = null
-            initASR()
+            initVoiceModule()
 
             asr?.apply {
                 language("zh_cn")
@@ -98,16 +123,14 @@ class HomeViewModel : ViewModel() {
                 if (ret == 0) {
                     isRunning = true
 
-                    // 初始化并启动录音
                     audioRecorderManager = AudioRecorderManager.getInstance()
                     audioRecorderManager?.registerCallBack(object : AudioRecorderManager.AudioDataCallback {
                         override fun onAudioData(data: ByteArray, size: Int) {
-                            // 将音频数据传递给ASR
                             writeAudioData(data)
                         }
 
                         override fun onAudioVolume(db: Double, volume: Int) {
-                            // 可以在这里处理音量变化
+                            // no-op
                         }
                     })
                     audioRecorderManager?.startRecord()
@@ -115,10 +138,9 @@ class HomeViewModel : ViewModel() {
                     withContext(Dispatchers.Main) {
                         _isRecording.value = true
                         _recognitionResult.value = "正在识别...\n"
-                        _text.value = null // 清空之前的识别结果
+                        _text.value = null
                     }
                 } else {
-                    Log.e("HomeViewModel", "Failed to start recognition, error code: $ret")
                     withContext(Dispatchers.Main) {
                         _recognitionResult.value = "识别开启失败，错误码: $ret\n"
                     }
@@ -129,18 +151,16 @@ class HomeViewModel : ViewModel() {
 
     fun stopVoiceRecognition() {
         viewModelScope.launch(Dispatchers.IO) {
-            if (isRunning) {
-                // 停止录音
-                audioRecorderManager?.stopRecord()
-                audioRecorderManager = null
+            if (!isRunning) return@launch
 
-                // 停止语音识别
-                asr?.stop(false)
-                isRunning = false
+            audioRecorderManager?.stopRecord()
+            audioRecorderManager = null
 
-                withContext(Dispatchers.Main) {
-                    _isRecording.value = false
-                }
+            asr?.stop(false)
+            isRunning = false
+
+            withContext(Dispatchers.Main) {
+                _isRecording.value = false
             }
         }
     }
@@ -150,11 +170,95 @@ class HomeViewModel : ViewModel() {
             asr?.write(data)
         }
     }
+    // endregion
+
+    // region BLE模块 - API
+    private val bleListener = object : BleManager.Listener {
+        override fun onScanFound(device: BluetoothDevice) {
+            _scanDeviceEvents.tryEmit(device)
+        }
+
+        override fun onConnected() {
+            _bleState.value = HomeBleState.Connected(currentDeviceName, null)
+            requestBattery()
+        }
+
+        override fun onDisconnected() {
+            _bleState.value = HomeBleState.Disconnected
+        }
+
+        override fun onMessage(bytes: ByteArray) {
+            val battery = parseBattery(bytes) ?: return
+            val oldState = _bleState.value
+            if (oldState is HomeBleState.Connected) {
+                _bleState.value = oldState.copy(battery = battery)
+            }
+        }
+
+        override fun onError(msg: String) {
+            _bleState.value = HomeBleState.Error(msg)
+        }
+    }
+
+    fun startScan() = bleManager.startScan()
+
+    fun stopScan() = bleManager.stopScan()
+
+    @SuppressLint("MissingPermission")
+    fun connect(device: BluetoothDevice) {
+        currentDeviceName = safeDeviceName(device)
+        _bleState.value = HomeBleState.Connecting(currentDeviceName)
+        bleManager.stopScan()
+        bleManager.connect(device, getApplication<Application>().applicationContext)
+    }
+
+    fun disconnect() = bleManager.disconnect()
+
+    private fun requestBattery() {
+        bleManager.write("BAT?\n".toByteArray())
+    }
+
+    private fun parseBattery(bytes: ByteArray): Int? {
+        val text = bytes.toString(Charsets.UTF_8).trim()
+
+        Regex("(?i)(?:BAT|BATT|BATTERY)\\s*[:=]\\s*(\\d{1,3})")
+            .find(text)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+            ?.let { return it.coerceIn(0, 100) }
+
+        text.toIntOrNull()?.let { return it.coerceIn(0, 100) }
+
+        if (bytes.size == 1) {
+            val value = bytes[0].toInt() and 0xFF
+            if (value in 0..100) return value
+        }
+
+        return null
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun safeDeviceName(device: BluetoothDevice): String {
+        return try {
+            device.name ?: device.address ?: "设备"
+        } catch (_: SecurityException) {
+            "设备"
+        }
+    }
+    // endregion
 
     override fun onCleared() {
-        super.onCleared()
+        // region 语音模块 - 资源释放
         audioRecorderManager?.stopRecord()
         asr?.stop(true)
         asr = null
+        // endregion
+
+        // region BLE模块 - 资源释放
+        bleManager.disconnect()
+        // endregion
+
+        super.onCleared()
     }
 }
