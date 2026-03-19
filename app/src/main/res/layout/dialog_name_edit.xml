@@ -56,7 +56,7 @@
                         android:layout_height="wrap_content"
                         android:gravity="center"
                         android:hint="新用户名"
-                        android:text="@={viewModel.newUserName}"/>
+                        android:text="@{viewModel.newUserName}"/>
 
                 </com.google.android.material.textfield.TextInputLayout>
 

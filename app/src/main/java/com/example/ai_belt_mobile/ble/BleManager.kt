@@ -7,6 +7,7 @@ import android.bluetooth.le.*
 import android.content.Context
 import android.os.Build
 import android.os.ParcelUuid
+import android.util.Log
 import androidx.annotation.RequiresPermission
 import java.util.UUID
 import kotlin.toString
@@ -87,6 +88,12 @@ class BleManager(
         val ch = service.getCharacteristic(WRITE_UUID) ?: return
         ch.value = data
         g.writeCharacteristic(ch)
+        Log.d("BLE_TX", "send=${data.toString(Charsets.UTF_8)} len=${data.size}")
+    }
+
+    @SuppressLint("MissingPermission")
+    fun writeText(text: String) {
+        write(text.toByteArray(Charsets.UTF_8))
     }
 
     private val gattCallback = object : BluetoothGattCallback() {

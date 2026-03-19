@@ -53,7 +53,7 @@
                         android:layout_height="wrap_content"
                         android:gravity="center"
                         android:hint="邮箱"
-                        android:text="@={viewModel.account}"
+                        android:text="@{viewModel.account}"
                         android:minHeight="56dp"
                         android:paddingTop="17dp"
                         android:paddingBottom="12dp" />
@@ -81,7 +81,7 @@
                         android:layout_height="wrap_content"
                         android:gravity="center"
                         android:hint="用户名"
-                        android:text="@={viewModel.name}"
+                        android:text="@{viewModel.name}"
                         android:minHeight="56dp"
                         android:paddingTop="17dp"
                         android:paddingBottom="12dp" />
@@ -110,7 +110,7 @@
                         android:gravity="center"
                         android:hint="密码"
                         android:inputType="textPassword"
-                        android:text="@={viewModel.password}"
+                        android:text="@{viewModel.password}"
                         android:minHeight="56dp"
                         android:paddingTop="17dp"
                         android:paddingBottom="12dp" />
@@ -152,7 +152,7 @@
                             android:minHeight="56dp"
                             android:paddingTop="17dp"
                             android:paddingBottom="12dp"
-                            android:text="@={viewModel.verify}" />
+                            android:text="@{viewModel.verify}" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <com.google.android.material.button.MaterialButton
@@ -188,7 +188,7 @@
                         android:gravity="center"
                         android:hint="手机号"
                         android:inputType="textPassword"
-                        android:text="@={viewModel.phone}"
+                        android:text="@{viewModel.phone}"
                         android:minHeight="56dp"
                         android:paddingTop="17dp"
                         android:paddingBottom="12dp" />
