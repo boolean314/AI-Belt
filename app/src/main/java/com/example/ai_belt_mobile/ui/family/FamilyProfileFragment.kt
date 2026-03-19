@@ -1,5 +1,6 @@
-package com.example.ai_belt_mobile.ui.home
+package com.example.ai_belt_mobile.ui.family
 
+import android.app.Activity.RESULT_OK
 import android.app.Dialog
 import android.content.Intent
 import android.graphics.Color
@@ -7,6 +8,7 @@ import android.graphics.drawable.ColorDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.ViewModelProvider
 import com.example.ai_belt_mobile.R
@@ -14,77 +16,108 @@ import com.example.ai_belt_mobile.base.BaseFragment
 import com.example.ai_belt_mobile.databinding.DialogNameEditBinding
 import com.example.ai_belt_mobile.databinding.DialogPasswordEditBinding
 import com.example.ai_belt_mobile.databinding.DialogPhoneEditBinding
-import com.example.ai_belt_mobile.databinding.FragmentProfileBinding
-import com.example.ai_belt_mobile.ui.activity.ChooseMemberActivity
+import com.example.ai_belt_mobile.databinding.FragmentFamilyProfileBinding
+import com.example.ai_belt_mobile.ui.activity.ScanActivity
+import com.example.ai_belt_mobile.ui.home.ProfileViewModel
 import com.example.ai_belt_mobile.viewModel.DialogPasswordVM
 import com.example.ai_belt_mobile.viewModel.DialogPhoneVM
 import com.example.ai_belt_mobile.viewModel.DialogUserNameVM
-import com.google.android.material.textview.MaterialTextView
-import kotlin.jvm.java
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.textfield.TextInputEditText
+class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
 
-class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
-    override val layoutId: Int = R.layout.fragment_profile
+    override val layoutId: Int = R.layout.fragment_family_profile
 
-    private lateinit var viewModel: ProfileViewModel
-    private var currentDialog: Dialog? = null
+    private lateinit var viewModel: FamilyProfileViewModel
+    private var bindDialog: Dialog? = null
+    private var dialogBindCodeInput: TextInputEditText? = null
+
+    private val scanLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode != RESULT_OK) return@registerForActivityResult
+            val code = result.data?.getStringExtra(ScanActivity.EXTRA_SCAN_RESULT).orEmpty()
+            if (code.isNotBlank()) {
+                dialogBindCodeInput?.setText(code)
+                dialogBindCodeInput?.setSelection(code.length)
+            }
+        }
+
 
     override fun initView() {
         super.initView()
-        viewModel = ViewModelProvider(this)[ProfileViewModel::class.java]
+        viewModel = ViewModelProvider(this)[FamilyProfileViewModel::class.java]
         binding.viewModel = viewModel
 
-        binding.failyMemberBtn.setOnClickListener {
-            val intent = Intent(requireContext(), ChooseMemberActivity::class.java)
-            startActivity(intent)
-        }
-        binding.bindByCodeButton.setOnClickListener { showBindCodeDialog(showQr = false) }
-        binding.bindByQrCodeButton.setOnClickListener { showBindCodeDialog(showQr = true) }
+        binding.bindByCodeButton.setOnClickListener { showMemberBindDialog() }
+        binding.bindByQrCodeButton.setOnClickListener { showMemberBindDialog() }
         binding.nameEditButton.setOnClickListener { showEditNameDialog() }
-        binding.passwordEditProfile.setOnClickListener { showEditPasswordDialog() }
+        binding.passwordEdit.setOnClickListener { showEditPasswordDialog() }
         binding.phoneEdit.setOnClickListener { showEditPhoneDialog() }
     }
 
-    private fun showBindCodeDialog(showQr: Boolean) {
+    private fun showMemberBindDialog() {
+        if (bindDialog?.isShowing == true) return
+
         val dialogView: View =
-            LayoutInflater.from(requireContext()).inflate(R.layout.dialog_show_bind_code, null, false)
+            LayoutInflater.from(requireContext()).inflate(R.layout.dialog_member_bind, null, false)
 
-        val bindCodeTv = dialogView.findViewById<MaterialTextView>(R.id.bind_code)
-        val bindQrIv = dialogView.findViewById<android.widget.ImageView>(R.id.bind_qr_code)
+        val etBindCode = dialogView.findViewById<TextInputEditText>(R.id.bind_code)
+        val btnBind = dialogView.findViewById<MaterialButton>(R.id.bind_btn)
+        val scanQrCard = dialogView.findViewById<MaterialCardView>(R.id.scan_qr_card)
 
-        val bindCode = viewModel.bindCode.value?.trim().orEmpty()
-        bindCodeTv.text = if (bindCode.isNotBlank()) bindCode else "--"
+        dialogBindCodeInput = etBindCode
 
-        if (showQr && bindCode.isNotBlank()) {
-            bindQrIv.visibility = View.VISIBLE
-            val qrBitmap = com.example.ai_belt_mobile.utils.QrCodeUtils.generate(bindCode, sizePx = 520)
-            if (qrBitmap != null) {
-                bindQrIv.setImageBitmap(qrBitmap)
-            } else {
-                bindQrIv.visibility = View.GONE
+        val dialog = AlertDialog.Builder(requireContext())
+            .setView(dialogView)
+            .create()
+
+        btnBind.setOnClickListener {
+            val code = etBindCode.text?.toString()?.trim().orEmpty()
+            if (code.isEmpty()) {
+                etBindCode.error = "请输入绑定码"
+                return@setOnClickListener
             }
-        } else {
-            bindQrIv.visibility = View.GONE
+
+            dialog.dismiss()
         }
 
-        val dialog = createStyledDialog(dialogView)
-        showStyledDialog(dialog)
+
+        scanQrCard.setOnClickListener {
+            scanLauncher.launch(Intent(requireContext(), ScanActivity::class.java))
+        }
+
+        dialog.setOnDismissListener {
+            dialogBindCodeInput = null
+        }
+
+        bindDialog = dialog
+        dialog.show()
+
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.setLayout(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
     }
 
     private fun showEditNameDialog() {
+
         val vm = DialogUserNameVM()
         val dialogBinding = DialogNameEditBinding.inflate(LayoutInflater.from(requireContext()))
         dialogBinding.viewModel = vm
         dialogBinding.lifecycleOwner = viewLifecycleOwner
 
         val dialog = createStyledDialog(dialogBinding.root)
+
         dialogBinding.ensureButton.setOnClickListener {
             val newName = vm.newUserName.value?.trim().orEmpty()
             if (newName.isEmpty()) {
                 dialogBinding.editAccount.error = "请输入新用户名"
                 return@setOnClickListener
             }
-            binding.nameText.text = newName
-            //从后台获取
+            viewModel.userName.value = newName
+            // TODO: 调用修改用户名接口
             dialog.dismiss()
         }
 
@@ -111,7 +144,7 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
                 dialogBinding.editEmail.error = "请输入邮箱"
                 return@setOnClickListener
             }
-            //从后台获取
+            // TODO: 调用发送验证码接口
         }
 
         dialogBinding.ensureButton.setOnClickListener {
@@ -132,7 +165,7 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
                 return@setOnClickListener
             }
 
-            //密码
+            // TODO: 调用修改密码接口
             dialog.dismiss()
         }
 
@@ -158,7 +191,7 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
                 dialogBinding.editAccount.error = "请输入手机号"
                 return@setOnClickListener
             }
-            //手机号
+            // TODO: 调用修改手机号接口
             dialog.dismiss()
         }
 
@@ -178,8 +211,6 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
     }
 
     private fun showStyledDialog(dialog: Dialog) {
-        currentDialog?.dismiss()
-        currentDialog = dialog
         dialog.show()
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         dialog.window?.setLayout(
@@ -189,8 +220,8 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
     }
 
     override fun onDestroyView() {
-        currentDialog?.dismiss()
-        currentDialog = null
+        bindDialog?.dismiss()
+        bindDialog = null
         super.onDestroyView()
     }
 }

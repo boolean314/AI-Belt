@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.ParcelUuid
 import androidx.annotation.RequiresPermission
 import java.util.UUID
+import kotlin.toString
 
 class BleManager(
     context: Context,
@@ -28,31 +29,37 @@ class BleManager(
     private var gatt: BluetoothGatt? = null
 
     companion object {
-        val SERVICE_UUID: UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
-        val WRITE_UUID: UUID = UUID.fromString("6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
-        val NOTIFY_UUID: UUID = UUID.fromString("6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
+        val SERVICE_UUID: UUID = UUID.fromString("4fafc201-1fb5-459e-8fcc-c5c9c331914b")
+        val WRITE_UUID: UUID = UUID.fromString("beb5483e-36e1-4688-b7f5-ea07361b26a8")
+        val NOTIFY_UUID: UUID = UUID.fromString("beb5483e-36e1-4688-b7f5-ea07361b26a8")
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            listener.onScanFound(result.device)
+            handleScanResult(result)
+        }
+
+        override fun onBatchScanResults(results: MutableList<ScanResult>) {
+            results.forEach { handleScanResult(it) }
         }
 
         override fun onScanFailed(errorCode: Int) {
             listener.onError("scan failed: $errorCode")
         }
+
     }
 
     @SuppressLint("MissingPermission")
     fun startScan() {
-        val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(SERVICE_UUID))
-            .build()
+//        val filter = ScanFilter.Builder()
+//            .setServiceUuid(ParcelUuid(SERVICE_UUID))
+//            .build()
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
             .build()
-        scanner?.startScan(listOf(filter), settings, scanCallback)
+        scanner?.startScan(null, settings, scanCallback)
             ?: listener.onError("BLE scanner unavailable")
     }
 
@@ -108,5 +115,11 @@ class BleManager(
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
             if (ch.uuid == NOTIFY_UUID) listener.onMessage(ch.value ?: ByteArray(0))
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun handleScanResult(result: ScanResult) {
+        // 这里不走 onError，避免把正常扫描当错误状态
+        listener.onScanFound(result.device)
     }
 }

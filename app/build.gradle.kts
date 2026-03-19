@@ -55,9 +55,20 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     implementation("com.github.dmytrodanylyk:circular-progress-button:1.4")
-    
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
+    val cameraxVersion = "1.3.4"
+    implementation("androidx.camera:camera-core:${cameraxVersion}")
+    implementation("androidx.camera:camera-camera2:${cameraxVersion}")
+    implementation("androidx.camera:camera-lifecycle:${cameraxVersion}")
+    implementation("androidx.camera:camera-view:${cameraxVersion}")
+
+    implementation("com.google.zxing:core:3.5.3")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+
     // SparkChain SDK
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
+
     // 权限请求框架：https://github.com/getActivity/XXPermissions
     implementation("com.github.getActivity:XXPermissions:28.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
