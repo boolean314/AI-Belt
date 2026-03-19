@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai_belt_mobile.ble.BleManager
 import com.example.ai_belt_mobile.network.RetrofitClient
+import com.example.ai_belt_mobile.repository.SpeakToAiRep
 import com.example.ai_belt_mobile.utils.AudioRecorderManager
 import com.iflytek.sparkchain.core.asr.ASR
 import com.iflytek.sparkchain.core.asr.AsrCallbacks
@@ -83,14 +84,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                         //等ai那边对接
                         /*viewModelScope.launch(Dispatchers.IO) {
                             try {
-                                val response = RetrofitClient.aiService.sendRecognition(result)
+                                val response = SpeakToAiRep().sendRecognition(result)
                                 Log.d("HomeViewModel", "AI 响应: ${response.want}, ${response.toDo}, ${response.what}")
 
                             } catch (e: Exception) {
                                 Log.e("HomeViewModel", "向ai请求失败", e)
                             }
-                        }
-                        */
+                        }*/
+
 
 
                     }

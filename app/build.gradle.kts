@@ -1,3 +1,4 @@
+import jdk.javadoc.internal.doclint.DocLint.main
 import org.gradle.kotlin.dsl.implementation
 
 plugins {
@@ -38,6 +39,7 @@ android {
         dataBinding = true
     }
 
+
 }
 
 dependencies {
@@ -51,6 +53,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.viewpager2)
+    implementation(files("libs/BaiduLBS_Android.aar"))
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
