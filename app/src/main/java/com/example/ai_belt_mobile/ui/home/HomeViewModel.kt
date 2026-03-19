@@ -274,6 +274,13 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             "设备"
         }
     }
+
+    fun sendOnCommand(text: String): Boolean {
+        val state = _bleState.value
+        if (state !is HomeBleState.Connected) return false
+        bleManager.writeText(text)
+        return true
+    }
     // endregion
 
     override fun onCleared() {

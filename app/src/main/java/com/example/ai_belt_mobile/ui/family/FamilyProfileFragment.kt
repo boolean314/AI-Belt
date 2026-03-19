@@ -51,8 +51,11 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
 
         binding.bindByCodeButton.setOnClickListener { showMemberBindDialog() }
         binding.bindByQrCodeButton.setOnClickListener { showMemberBindDialog() }
+        binding.nameCard.setOnClickListener { showEditNameDialog() }
         binding.nameEditButton.setOnClickListener { showEditNameDialog() }
+        binding.homepageEditPasswordCard.setOnClickListener { showEditPasswordDialog() }
         binding.passwordEdit.setOnClickListener { showEditPasswordDialog() }
+        binding.homepageEditPhoneCard.setOnClickListener { showEditPhoneDialog() }
         binding.phoneEdit.setOnClickListener { showEditPhoneDialog() }
     }
 
@@ -116,7 +119,7 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
                 dialogBinding.editAccount.error = "请输入新用户名"
                 return@setOnClickListener
             }
-            viewModel.userName.value = newName
+            viewModel.updateUserName(newName)
             // TODO: 调用修改用户名接口
             dialog.dismiss()
         }

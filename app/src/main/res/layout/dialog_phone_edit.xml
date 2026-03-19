@@ -56,7 +56,7 @@
                     android:layout_height="wrap_content"
                     android:gravity="center"
                     android:hint="手机号码"
-                    android:text="@={viewModel.newPhone}"/>
+                    android:text="@{viewModel.newPhone}"/>
 
             </com.google.android.material.textfield.TextInputLayout>
 

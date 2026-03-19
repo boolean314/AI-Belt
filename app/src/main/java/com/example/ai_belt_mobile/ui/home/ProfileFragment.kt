@@ -20,7 +20,10 @@ import com.example.ai_belt_mobile.viewModel.DialogPasswordVM
 import com.example.ai_belt_mobile.viewModel.DialogPhoneVM
 import com.example.ai_belt_mobile.viewModel.DialogUserNameVM
 import com.google.android.material.textview.MaterialTextView
-import kotlin.jvm.java
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 
 class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
     override val layoutId: Int = R.layout.fragment_profile
@@ -32,16 +35,36 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
         super.initView()
         viewModel = ViewModelProvider(this)[ProfileViewModel::class.java]
         binding.viewModel = viewModel
+        binding.lifecycleOwner = viewLifecycleOwner
 
-        binding.failyMemberBtn.setOnClickListener {
+        binding.familyMemberCard.setOnClickListener {
+            val intent = Intent(requireContext(), ChooseMemberActivity::class.java)
+            startActivity(intent)
+        }
+        binding.familyMemberBtn.setOnClickListener {
             val intent = Intent(requireContext(), ChooseMemberActivity::class.java)
             startActivity(intent)
         }
         binding.bindByCodeButton.setOnClickListener { showBindCodeDialog(showQr = false) }
         binding.bindByQrCodeButton.setOnClickListener { showBindCodeDialog(showQr = true) }
+        binding.nameCard.setOnClickListener { showEditNameDialog() }
         binding.nameEditButton.setOnClickListener { showEditNameDialog() }
+        binding.homepageEditPasswordCard.setOnClickListener { showEditPasswordDialog() }
         binding.passwordEditProfile.setOnClickListener { showEditPasswordDialog() }
+        binding.homepageEditPhoneCard.setOnClickListener { showEditPhoneDialog() }
         binding.phoneEdit.setOnClickListener { showEditPhoneDialog() }
+    }
+
+    override fun initData() {
+        super.initData()
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.userName.collect { name ->
+                    binding.nameText.text = name
+                }
+            }
+        }
     }
 
     private fun showBindCodeDialog(showQr: Boolean) {
@@ -51,7 +74,7 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
         val bindCodeTv = dialogView.findViewById<MaterialTextView>(R.id.bind_code)
         val bindQrIv = dialogView.findViewById<android.widget.ImageView>(R.id.bind_qr_code)
 
-        val bindCode = viewModel.bindCode.value?.trim().orEmpty()
+        val bindCode = viewModel.bindCode.value.trim()
         bindCodeTv.text = if (bindCode.isNotBlank()) bindCode else "--"
 
         if (showQr && bindCode.isNotBlank()) {
@@ -83,7 +106,7 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
                 dialogBinding.editAccount.error = "请输入新用户名"
                 return@setOnClickListener
             }
-            binding.nameText.text = newName
+            viewModel.updateUserName(newName)
             //从后台获取
             dialog.dismiss()
         }
