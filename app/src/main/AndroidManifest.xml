@@ -56,9 +56,6 @@
             android:name=".ui.activity.ScanActivity"
             android:exported="false" />
         <activity
-            android:name=".ui.activity.MemberBindActivity"
-            android:exported="false" />
-        <activity
             android:name=".ui.activity.ChooseIdentityActivity"
             android:exported="false" />
         <activity

@@ -56,23 +56,28 @@
                     android:layout_height="wrap_content"
                     android:gravity="center"
                     android:hint="手机号码"
-                    android:text="@={viewModel.newPhone}"/>
+                    android:text="@{viewModel.newPhone}"/>
 
             </com.google.android.material.textfield.TextInputLayout>
 
-            <com.google.android.material.button.MaterialButton
+            <com.dd.CircularProgressButton
                 android:id="@+id/ensure_button"
                 android:layout_width="match_parent"
                 android:layout_height="60dp"
-                android:layout_marginStart="5dp"
-                android:layout_marginEnd="5dp"
-                android:backgroundTint="#7B83F4"
+                android:layout_marginStart="20dp"
+                android:layout_marginTop="20dp"
+                android:layout_marginEnd="20dp"
+                android:layout_marginBottom="20dp"
                 android:text="确认修改"
+                android:textColor="@android:color/white"
                 android:textSize="24sp"
-                android:layout_marginTop="10dp"
-                android:layout_marginBottom="10dp"
-                android:layout_gravity="center_horizontal"
-                app:backgroundTint="@null"/>
+                app:cpb_cornerRadius="30dp"
+                app:cpb_iconComplete="@drawable/correct"
+                app:cpb_iconError="@drawable/wrong"
+                app:cpb_selectorComplete="@drawable/success_state_selector"
+                app:cpb_selectorError="@drawable/failed_state_selector"
+                app:cpb_selectorIdle="@drawable/init_state_selector"
+                app:cpb_textIdle="确认修改"/>
 
         </LinearLayout>
 

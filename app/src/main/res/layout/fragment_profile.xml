@@ -36,6 +36,7 @@
                     android:layout_height="wrap_content">
 
                     <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/name_card"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="15dp"
@@ -128,6 +129,7 @@
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/family_member_card"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_margin="15dp"
@@ -165,7 +167,7 @@
                         android:layout_marginBottom="15dp"/>
 
                     <ImageButton
-                        android:id="@+id/faily_member_btn"
+                        android:id="@+id/family_member_btn"
                         android:layout_width="30dp"
                         android:layout_height="30dp"
                         android:background="#00ffffff"
