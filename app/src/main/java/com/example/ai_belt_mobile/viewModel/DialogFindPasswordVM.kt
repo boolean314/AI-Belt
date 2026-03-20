@@ -3,13 +3,11 @@ package com.example.ai_belt_mobile.viewModel
 import android.content.Context
 import android.util.Patterns
 import android.widget.Toast
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dd.CircularProgressButton
+import com.example.ai_belt_mobile.data.model.ForgetPassword
 import com.example.ai_belt_mobile.data.model.GetVerifyCode
-import com.example.ai_belt_mobile.data.model.RegisterData
-import com.example.ai_belt_mobile.data.model.UserRegister
 import com.example.ai_belt_mobile.network.UserRetrofitClient
 import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.Job
@@ -19,46 +17,40 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class RegisterVM : ViewModel() {
-    private val _account = MutableStateFlow("")
-    val account: StateFlow<String> = _account.asStateFlow()
+class DialogFindPasswordVM : ViewModel() {
 
-    private val _name = MutableStateFlow("")
-    val name: StateFlow<String> = _name.asStateFlow()
+    private val _mail = MutableStateFlow("")
+    val mail : StateFlow<String> = _mail.asStateFlow()
+
+    private val _code = MutableStateFlow("")
+    val code : StateFlow<String> = _code.asStateFlow()
 
     private val _password = MutableStateFlow("")
-    val password: StateFlow<String> = _password.asStateFlow()
-
-    private val _verify = MutableStateFlow("")
-    val verify: StateFlow<String> = _verify.asStateFlow()
-
-    private val _phone = MutableStateFlow("")
-    val phone: StateFlow<String> = _phone.asStateFlow()
-
-    private val _identity = MutableStateFlow(-1)
-    val identity: StateFlow<Int> = _identity.asStateFlow()
+    val password : StateFlow<String> = _password.asStateFlow()
 
     private var sendCodeJob: Job? = null
     private var submitJob: Job? = null
 
-    fun updateAccount(value: String) { _account.value = value }
-    fun updateName(value: String) { _name.value = value }
-    fun updatePassword(value: String) { _password.value = value }
-    fun updateVerify(value: String) { _verify.value = value }
-    fun updatePhone(value: String) { _phone.value = value }
-    fun updateIdentity(value: Int) { _identity.value = value }
+    fun updateEmail(value: String) {
+        _mail.value = value
+    }
+
+    fun updateCode(value: String) {
+        _code.value = value
+    }
+
+    fun updatePassword(value: String) {
+        _password.value = value
+    }
 
     fun canSubmit(): Boolean {
-        return _account.value.trim().isNotEmpty() &&
-                _name.value.trim().isNotEmpty() &&
-                _password.value.trim().isNotEmpty() &&
-                _verify.value.trim().isNotEmpty() &&
-                _phone.value.trim().isNotEmpty() &&
-                (_identity.value == 0 || _identity.value == 1)
+        return _mail.value.trim().isNotEmpty() &&
+                _code.value.trim().isNotEmpty() &&
+                _password.value.trim().isNotEmpty()
     }
 
     fun validateEmail(): String? {
-        val value = _account.value.trim()
+        val value = _mail.value.trim()
         return when {
             value.isEmpty() -> "请输入邮箱"
             !Patterns.EMAIL_ADDRESS.matcher(value).matches() -> "邮箱格式不正确"
@@ -68,15 +60,15 @@ class RegisterVM : ViewModel() {
 
     fun validateAll(): String? {
         validateEmail()?.let { return it }
-        if (_name.value.trim().isEmpty()) return "请输入用户名"
-        if (_password.value.trim().isEmpty()) return "请输入密码"
-        if (_verify.value.trim().isEmpty()) return "请输入验证码"
-        if (_phone.value.trim().isEmpty()) return "请输入手机号"
-        if (!(_identity.value == 0 || _identity.value == 1)) return "身份参数无效"
+        if (_code.value.trim().isEmpty()) return "请输入验证码"
+        if (_password.value.trim().isEmpty()) return "请输入新密码"
         return null
     }
 
-    fun sendVerifyCode(context: Context, sendButton: MaterialButton) {
+    fun sendVerifyCode(
+        context: Context,
+        sendButton: MaterialButton
+    ) {
         if (sendCodeJob?.isActive == true) return
 
         val emailErr = validateEmail()
@@ -91,7 +83,7 @@ class RegisterVM : ViewModel() {
         sendCodeJob = viewModelScope.launch {
             try {
                 val resp = UserRetrofitClient.instance.sendCode(
-                    GetVerifyCode(mail = _account.value.trim())
+                    GetVerifyCode(mail = _mail.value.trim())
                 )
                 if (resp.code == 200) {
                     Toast.makeText(context, resp.message, Toast.LENGTH_SHORT).show()
@@ -109,10 +101,10 @@ class RegisterVM : ViewModel() {
         }
     }
 
-    fun register(
+    fun submitForgetPassword(
         context: Context,
         progressButton: CircularProgressButton,
-        onSuccess: (data: RegisterData) -> Unit
+        onSuccess: (() -> Unit)? = null
     ) {
         if (submitJob?.isActive == true) return
 
@@ -126,23 +118,18 @@ class RegisterVM : ViewModel() {
 
         submitJob = viewModelScope.launch {
             try {
-                val resp = UserRetrofitClient.instance.register(
-                    UserRegister(
-                        mail = _account.value.trim(),
-                        name = _name.value.trim(),
+                val resp = UserRetrofitClient.instance.forgetPassword(
+                    ForgetPassword(
+                        email = _mail.value.trim(),
                         password = _password.value.trim(),
-                        code = _verify.value.trim(),
-                        phone = _phone.value.trim(),
-                        identity = _identity.value,
-                        emergency = ""
+                        code = _code.value.trim()
                     )
                 )
-
-                if (resp.code == 200 && resp.data != null) {
+                if (resp.code == 200) {
                     progressButton.progress = CircularProgressButton.SUCCESS_STATE_PROGRESS
                     Toast.makeText(context, resp.message, Toast.LENGTH_SHORT).show()
                     delay(800)
-                    onSuccess(resp.data)
+                    onSuccess?.invoke()
                 } else {
                     progressButton.progress = CircularProgressButton.ERROR_STATE_PROGRESS
                     Toast.makeText(context, resp.message, Toast.LENGTH_SHORT).show()

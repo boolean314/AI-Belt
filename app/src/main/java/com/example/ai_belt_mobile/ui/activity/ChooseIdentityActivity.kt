@@ -25,11 +25,19 @@ class ChooseIdentityActivity : AppCompatActivity() {
             insets
         }
         binding.disabledBtn.setOnClickListener {
-            val intent = Intent(this, MainActivity::class.java)
+            val data = 0    //携带残疾人身份跳转至注册页面
+            val intent = Intent(this, RegisterActivity::class.java)
+            intent.putExtra("identity", data)
             startActivity(intent)
         }
         binding.familyMemberBtn.setOnClickListener {
-            val intent = Intent(this, MemberBindActivity::class.java)
+            val data = 1    //携带家庭成员身份跳转至注册页面
+            val intent = Intent(this, RegisterActivity::class.java)
+            intent.putExtra("identity", data)
+            startActivity(intent)
+        }
+        binding.loginEntrance.setOnClickListener {
+            val intent = Intent(this, LoginActivity::class.java)
             startActivity(intent)
         }
     }

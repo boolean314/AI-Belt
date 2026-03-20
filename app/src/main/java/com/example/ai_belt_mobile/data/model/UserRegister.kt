@@ -3,7 +3,7 @@ package com.example.ai_belt_mobile.data.model
 import javax.security.auth.callback.PasswordCallback
 
 data class UserRegister(
-    val email: String,
+    val mail: String,
     val name: String,
     val password: String,
     val code: String,   //邮箱发过来的验证码

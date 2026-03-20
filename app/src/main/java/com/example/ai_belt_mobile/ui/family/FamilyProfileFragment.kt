@@ -10,13 +10,19 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import androidx.core.widget.doAfterTextChanged
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.ai_belt_mobile.R
 import com.example.ai_belt_mobile.base.BaseFragment
+import com.example.ai_belt_mobile.data.local.UserSessionStore
 import com.example.ai_belt_mobile.databinding.DialogNameEditBinding
 import com.example.ai_belt_mobile.databinding.DialogPasswordEditBinding
 import com.example.ai_belt_mobile.databinding.DialogPhoneEditBinding
 import com.example.ai_belt_mobile.databinding.FragmentFamilyProfileBinding
+import com.example.ai_belt_mobile.ui.activity.LoginActivity
 import com.example.ai_belt_mobile.ui.activity.ScanActivity
 import com.example.ai_belt_mobile.ui.home.ProfileViewModel
 import com.example.ai_belt_mobile.viewModel.DialogPasswordVM
@@ -25,12 +31,15 @@ import com.example.ai_belt_mobile.viewModel.DialogUserNameVM
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.textfield.TextInputEditText
+import kotlinx.coroutines.launch
+
 class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
 
     override val layoutId: Int = R.layout.fragment_family_profile
 
     private lateinit var viewModel: FamilyProfileViewModel
     private var bindDialog: Dialog? = null
+    private var currentDialog: Dialog? = null
     private var dialogBindCodeInput: TextInputEditText? = null
 
     private val scanLauncher =
@@ -43,11 +52,13 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
             }
         }
 
-
     override fun initView() {
         super.initView()
         viewModel = ViewModelProvider(this)[FamilyProfileViewModel::class.java]
         binding.viewModel = viewModel
+        binding.lifecycleOwner = viewLifecycleOwner
+
+        viewModel.loadFromSession(requireContext())
 
         binding.bindByCodeButton.setOnClickListener { showMemberBindDialog() }
         binding.bindByQrCodeButton.setOnClickListener { showMemberBindDialog() }
@@ -57,6 +68,27 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
         binding.passwordEdit.setOnClickListener { showEditPasswordDialog() }
         binding.homepageEditPhoneCard.setOnClickListener { showEditPhoneDialog() }
         binding.phoneEdit.setOnClickListener { showEditPhoneDialog() }
+
+        binding.logoutButton.setOnClickListener {
+            UserSessionStore.clear(requireContext())
+            startActivity(
+                Intent(requireContext(), LoginActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                }
+            )
+            requireActivity().finish()
+        }
+    }
+
+    override fun initData() {
+        super.initData()
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.userName.collect { name ->
+                    binding.nameText.text = name
+                }
+            }
+        }
     }
 
     private fun showMemberBindDialog() {
@@ -71,6 +103,17 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
 
         dialogBindCodeInput = etBindCode
 
+        fun refreshBindBtn() {
+            val enabled = etBindCode.text?.toString()?.trim().orEmpty().isNotEmpty()
+            btnBind.isEnabled = enabled
+            btnBind.alpha = if (enabled) 1f else 0.5f
+        }
+
+        etBindCode.doAfterTextChanged {
+            etBindCode.error = null
+            refreshBindBtn()
+        }
+
         val dialog = AlertDialog.Builder(requireContext())
             .setView(dialogView)
             .create()
@@ -82,9 +125,10 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
                 return@setOnClickListener
             }
 
-            dialog.dismiss()
+            viewModel.bindDisability(requireContext(), code) {
+                dialog.dismiss()
+            }
         }
-
 
         scanQrCard.setOnClickListener {
             scanLauncher.launch(Intent(requireContext(), ScanActivity::class.java))
@@ -96,6 +140,7 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
 
         bindDialog = dialog
         dialog.show()
+        refreshBindBtn()
 
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         dialog.window?.setLayout(
@@ -105,32 +150,47 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
     }
 
     private fun showEditNameDialog() {
-
         val vm = DialogUserNameVM()
         val dialogBinding = DialogNameEditBinding.inflate(LayoutInflater.from(requireContext()))
         dialogBinding.viewModel = vm
         dialogBinding.lifecycleOwner = viewLifecycleOwner
 
+        vm.updateNewUserName(viewModel.userName.value)
+        dialogBinding.editAccount.setText(viewModel.userName.value)
+        dialogBinding.editAccount.setSelection(dialogBinding.editAccount.text?.length ?: 0)
+
+        fun refreshBtn() {
+            val enabled = vm.canSubmit()
+            dialogBinding.ensureButton.isEnabled = enabled
+            dialogBinding.ensureButton.alpha = if (enabled) 1f else 0.5f
+        }
+
+        dialogBinding.editAccount.doAfterTextChanged {
+            vm.updateNewUserName(it?.toString().orEmpty())
+            dialogBinding.editAccount.error = null
+            refreshBtn()
+        }
+
         val dialog = createStyledDialog(dialogBinding.root)
 
         dialogBinding.ensureButton.setOnClickListener {
-            val newName = vm.newUserName.value?.trim().orEmpty()
-            if (newName.isEmpty()) {
-                dialogBinding.editAccount.error = "请输入新用户名"
+            val err = vm.validate()
+            if (err != null) {
+                dialogBinding.editAccount.error = err
                 return@setOnClickListener
             }
-            viewModel.updateUserName(newName)
-            // TODO: 调用修改用户名接口
-            dialog.dismiss()
+
+            viewModel.updateUserName(
+                context = requireContext(),
+                newName = vm.newUserName.value,
+                progressButton = dialogBinding.ensureButton
+            ) {
+                dialog.dismiss()
+            }
         }
 
         showStyledDialog(dialog)
-
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.window?.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
+        refreshBtn()
     }
 
     private fun showEditPasswordDialog() {
@@ -139,46 +199,82 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
         dialogBinding.viewModel = vm
         dialogBinding.lifecycleOwner = viewLifecycleOwner
 
+        vm.updateEmail(viewModel.mail.value)
+        dialogBinding.editEmail.setText(viewModel.mail.value)
+        dialogBinding.editEmail.setSelection(dialogBinding.editEmail.text?.length ?: 0)
+
+        fun refreshBtn() {
+            val enabled = vm.canSubmit()
+            dialogBinding.ensureButton.isEnabled = enabled
+            dialogBinding.ensureButton.alpha = if (enabled) 1f else 0.5f
+        }
+
+        dialogBinding.editEmail.doAfterTextChanged {
+            vm.updateEmail(it?.toString().orEmpty())
+            dialogBinding.editEmail.error = null
+            refreshBtn()
+        }
+        dialogBinding.editVerifyCode.doAfterTextChanged {
+            vm.updateVerifyCode(it?.toString().orEmpty())
+            dialogBinding.editVerifyCode.error = null
+            refreshBtn()
+        }
+        dialogBinding.editPassword.doAfterTextChanged {
+            vm.updateNewPassword(it?.toString().orEmpty())
+            dialogBinding.editPassword.error = null
+            refreshBtn()
+        }
+
         val dialog = createStyledDialog(dialogBinding.root)
 
         dialogBinding.GetVerifyCodeButton.setOnClickListener {
-            val email = vm.email.value?.trim().orEmpty()
-            if (email.isEmpty()) {
-                dialogBinding.editEmail.error = "请输入邮箱"
+            vm.updateEmail(dialogBinding.editEmail.text?.toString().orEmpty())
+            val emailErr = vm.validateEmail()
+            if (emailErr != null) {
+                dialogBinding.editEmail.error = emailErr
                 return@setOnClickListener
             }
-            // TODO: 调用发送验证码接口
+
+            viewModel.sendPasswordCode(
+                requireContext(),
+                vm.email.value,
+                dialogBinding.GetVerifyCodeButton
+            )
         }
 
         dialogBinding.ensureButton.setOnClickListener {
-            val email = vm.email.value?.trim().orEmpty()
-            val code = vm.verifyCode.value?.trim().orEmpty()
-            val newPwd = vm.newPassword.value?.trim().orEmpty()
+            vm.updateEmail(dialogBinding.editEmail.text?.toString().orEmpty())
+            vm.updateVerifyCode(dialogBinding.editVerifyCode.text?.toString().orEmpty())
+            vm.updateNewPassword(dialogBinding.editPassword.text?.toString().orEmpty())
 
-            if (email.isEmpty()) {
-                dialogBinding.editEmail.error = "请输入邮箱"
-                return@setOnClickListener
-            }
-            if (code.isEmpty()) {
-                dialogBinding.editVerifyCode.error = "请输入验证码"
-                return@setOnClickListener
-            }
-            if (newPwd.isEmpty()) {
-                dialogBinding.editPassword.error = "请输入新密码"
-                return@setOnClickListener
+            when (val err = vm.validateAll()) {
+                "请输入邮箱", "邮箱格式不正确" -> {
+                    dialogBinding.editEmail.error = err
+                    return@setOnClickListener
+                }
+                "请输入验证码" -> {
+                    dialogBinding.editVerifyCode.error = err
+                    return@setOnClickListener
+                }
+                "请输入新密码" -> {
+                    dialogBinding.editPassword.error = err
+                    return@setOnClickListener
+                }
             }
 
-            // TODO: 调用修改密码接口
-            dialog.dismiss()
+            viewModel.submitPasswordReset(
+                context = requireContext(),
+                progressButton = dialogBinding.ensureButton,
+                email = vm.email.value,
+                code = vm.verifyCode.value,
+                newPassword = vm.newPassword.value
+            ) {
+                dialog.dismiss()
+            }
         }
 
         showStyledDialog(dialog)
-
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.window?.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
+        refreshBtn()
     }
 
     private fun showEditPhoneDialog() {
@@ -187,24 +283,41 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
         dialogBinding.viewModel = vm
         dialogBinding.lifecycleOwner = viewLifecycleOwner
 
+        vm.updateNewPhone(viewModel.phone.value)
+        dialogBinding.editAccount.setText(viewModel.phone.value)
+        dialogBinding.editAccount.setSelection(dialogBinding.editAccount.text?.length ?: 0)
+
+        fun refreshBtn() {
+            val enabled = vm.canSubmit()
+            dialogBinding.ensureButton.isEnabled = enabled
+            dialogBinding.ensureButton.alpha = if (enabled) 1f else 0.5f
+        }
+
+        dialogBinding.editAccount.doAfterTextChanged {
+            vm.updateNewPhone(it?.toString().orEmpty())
+            dialogBinding.editAccount.error = null
+            refreshBtn()
+        }
+
         val dialog = createStyledDialog(dialogBinding.root)
         dialogBinding.ensureButton.setOnClickListener {
-            val newPhone = vm.newPhone.value?.trim().orEmpty()
-            if (newPhone.isEmpty()) {
-                dialogBinding.editAccount.error = "请输入手机号"
+            val err = vm.validate()
+            if (err != null) {
+                dialogBinding.editAccount.error = err
                 return@setOnClickListener
             }
-            // TODO: 调用修改手机号接口
-            dialog.dismiss()
+
+            viewModel.updatePhone(
+                context = requireContext(),
+                newPhone = vm.newPhone.value,
+                progressButton = dialogBinding.ensureButton
+            ) {
+                dialog.dismiss()
+            }
         }
 
         showStyledDialog(dialog)
-
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.window?.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
+        refreshBtn()
     }
 
     private fun createStyledDialog(contentView: View): AlertDialog {
@@ -214,6 +327,8 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
     }
 
     private fun showStyledDialog(dialog: Dialog) {
+        currentDialog?.dismiss()
+        currentDialog = dialog
         dialog.show()
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         dialog.window?.setLayout(
@@ -223,6 +338,8 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
     }
 
     override fun onDestroyView() {
+        currentDialog?.dismiss()
+        currentDialog = null
         bindDialog?.dismiss()
         bindDialog = null
         super.onDestroyView()

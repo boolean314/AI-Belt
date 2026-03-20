@@ -19,7 +19,7 @@ object UserRetrofitClient {
             .build()
 
         val gson: Gson = GsonBuilder()
-            .registerTypeAdapter(LocalDateTime::class.java, LocalDataTimeDeserializer()) // 注册自定义解析器
+            .registerTypeAdapter(LocalDateTime::class.java, LocalDataTimeDeserializer()) //自定义解析器
             .create()
 
         Retrofit.Builder()

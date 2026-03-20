@@ -45,7 +45,7 @@
             android:layout_height="wrap_content"
             android:layout_marginEnd="15dp"
             android:backgroundTint="@android:color/transparent"
-            android:text="紧急"
+            android:text="普通"
             android:textColor="#615D5D"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"

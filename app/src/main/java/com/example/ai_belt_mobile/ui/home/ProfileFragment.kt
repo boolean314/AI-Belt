@@ -8,6 +8,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.ViewModelProvider
 import com.example.ai_belt_mobile.R
 import com.example.ai_belt_mobile.base.BaseFragment
@@ -37,27 +38,30 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
         binding.viewModel = viewModel
         binding.lifecycleOwner = viewLifecycleOwner
 
+        viewModel.loadFromSession(requireContext())
+
         binding.familyMemberCard.setOnClickListener {
-            val intent = Intent(requireContext(), ChooseMemberActivity::class.java)
-            startActivity(intent)
+            startActivity(Intent(requireContext(), ChooseMemberActivity::class.java))
         }
         binding.familyMemberBtn.setOnClickListener {
-            val intent = Intent(requireContext(), ChooseMemberActivity::class.java)
-            startActivity(intent)
+            startActivity(Intent(requireContext(), ChooseMemberActivity::class.java))
         }
+
         binding.bindByCodeButton.setOnClickListener { showBindCodeDialog(showQr = false) }
         binding.bindByQrCodeButton.setOnClickListener { showBindCodeDialog(showQr = true) }
+
         binding.nameCard.setOnClickListener { showEditNameDialog() }
         binding.nameEditButton.setOnClickListener { showEditNameDialog() }
+
         binding.homepageEditPasswordCard.setOnClickListener { showEditPasswordDialog() }
         binding.passwordEditProfile.setOnClickListener { showEditPasswordDialog() }
+
         binding.homepageEditPhoneCard.setOnClickListener { showEditPhoneDialog() }
         binding.phoneEdit.setOnClickListener { showEditPhoneDialog() }
     }
 
     override fun initData() {
         super.initData()
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.userName.collect { name ->
@@ -68,20 +72,20 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
     }
 
     private fun showBindCodeDialog(showQr: Boolean) {
-        val dialogView: View =
-            LayoutInflater.from(requireContext()).inflate(R.layout.dialog_show_bind_code, null, false)
+        val dialogView = LayoutInflater.from(requireContext())
+            .inflate(R.layout.dialog_show_bind_code, null, false)
 
         val bindCodeTv = dialogView.findViewById<MaterialTextView>(R.id.bind_code)
         val bindQrIv = dialogView.findViewById<android.widget.ImageView>(R.id.bind_qr_code)
 
-        val bindCode = viewModel.bindCode.value.trim()
-        bindCodeTv.text = if (bindCode.isNotBlank()) bindCode else "--"
+        val code = viewModel.bindCode.value.trim()
+        bindCodeTv.text = if (code.isNotBlank()) code else "--"
 
-        if (showQr && bindCode.isNotBlank()) {
-            bindQrIv.visibility = View.VISIBLE
-            val qrBitmap = com.example.ai_belt_mobile.utils.QrCodeUtils.generate(bindCode, sizePx = 520)
-            if (qrBitmap != null) {
-                bindQrIv.setImageBitmap(qrBitmap)
+        if (showQr && code.isNotBlank()) {
+            val bmp = com.example.ai_belt_mobile.utils.QrCodeUtils.generate(code, sizePx = 520)
+            if (bmp != null) {
+                bindQrIv.visibility = View.VISIBLE
+                bindQrIv.setImageBitmap(bmp)
             } else {
                 bindQrIv.visibility = View.GONE
             }
@@ -99,25 +103,40 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
         dialogBinding.viewModel = vm
         dialogBinding.lifecycleOwner = viewLifecycleOwner
 
+        vm.updateNewUserName(viewModel.userName.value)
+        dialogBinding.editAccount.setText(viewModel.userName.value)
+        dialogBinding.editAccount.setSelection(dialogBinding.editAccount.text?.length ?: 0)
+
+        fun refreshBtn() {
+            val enabled = vm.canSubmit()
+            dialogBinding.ensureButton.isEnabled = enabled
+            dialogBinding.ensureButton.alpha = if (enabled) 1f else 0.5f
+        }
+
+        dialogBinding.editAccount.doAfterTextChanged {
+            vm.updateNewUserName(it?.toString().orEmpty())
+            dialogBinding.editAccount.error = null
+            refreshBtn()
+        }
+
         val dialog = createStyledDialog(dialogBinding.root)
         dialogBinding.ensureButton.setOnClickListener {
-            val newName = vm.newUserName.value?.trim().orEmpty()
-            if (newName.isEmpty()) {
-                dialogBinding.editAccount.error = "请输入新用户名"
+            val err = vm.validate()
+            if (err != null) {
+                dialogBinding.editAccount.error = err
                 return@setOnClickListener
             }
-            viewModel.updateUserName(newName)
-            //从后台获取
-            dialog.dismiss()
+            viewModel.updateUserName(
+                context = requireContext(),
+                newName = vm.newUserName.value,
+                progressButton = dialogBinding.ensureButton
+            ) {
+                dialog.dismiss()
+            }
         }
 
         showStyledDialog(dialog)
-
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.window?.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
+        refreshBtn()
     }
 
     private fun showEditPasswordDialog() {
@@ -126,46 +145,81 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
         dialogBinding.viewModel = vm
         dialogBinding.lifecycleOwner = viewLifecycleOwner
 
+        vm.updateEmail(viewModel.mail.value)
+        dialogBinding.editEmail.setText(viewModel.mail.value)
+        dialogBinding.editEmail.setSelection(dialogBinding.editEmail.text?.length ?: 0)
+
+        fun refreshBtn() {
+            val enabled = vm.canSubmit()
+            dialogBinding.ensureButton.isEnabled = enabled
+            dialogBinding.ensureButton.alpha = if (enabled) 1f else 0.5f
+        }
+
+        dialogBinding.editEmail.doAfterTextChanged {
+            vm.updateEmail(it?.toString().orEmpty())
+            dialogBinding.editEmail.error = null
+            refreshBtn()
+        }
+        dialogBinding.editVerifyCode.doAfterTextChanged {
+            vm.updateVerifyCode(it?.toString().orEmpty())
+            dialogBinding.editVerifyCode.error = null
+            refreshBtn()
+        }
+        dialogBinding.editPassword.doAfterTextChanged {
+            vm.updateNewPassword(it?.toString().orEmpty())
+            dialogBinding.editPassword.error = null
+            refreshBtn()
+        }
+
         val dialog = createStyledDialog(dialogBinding.root)
 
         dialogBinding.GetVerifyCodeButton.setOnClickListener {
-            val email = vm.email.value?.trim().orEmpty()
-            if (email.isEmpty()) {
-                dialogBinding.editEmail.error = "请输入邮箱"
+            vm.updateEmail(dialogBinding.editEmail.text?.toString().orEmpty())
+            val emailErr = vm.validateEmail()
+            if (emailErr != null) {
+                dialogBinding.editEmail.error = emailErr
                 return@setOnClickListener
             }
-            //从后台获取
+            viewModel.sendPasswordCode(
+                context = requireContext(),
+                email = vm.email.value,
+                button = dialogBinding.GetVerifyCodeButton
+            )
         }
 
         dialogBinding.ensureButton.setOnClickListener {
-            val email = vm.email.value?.trim().orEmpty()
-            val code = vm.verifyCode.value?.trim().orEmpty()
-            val newPwd = vm.newPassword.value?.trim().orEmpty()
+            vm.updateEmail(dialogBinding.editEmail.text?.toString().orEmpty())
+            vm.updateVerifyCode(dialogBinding.editVerifyCode.text?.toString().orEmpty())
+            vm.updateNewPassword(dialogBinding.editPassword.text?.toString().orEmpty())
 
-            if (email.isEmpty()) {
-                dialogBinding.editEmail.error = "请输入邮箱"
-                return@setOnClickListener
-            }
-            if (code.isEmpty()) {
-                dialogBinding.editVerifyCode.error = "请输入验证码"
-                return@setOnClickListener
-            }
-            if (newPwd.isEmpty()) {
-                dialogBinding.editPassword.error = "请输入新密码"
-                return@setOnClickListener
+            when (val err = vm.validateAll()) {
+                "请输入邮箱", "邮箱格式不正确" -> {
+                    dialogBinding.editEmail.error = err
+                    return@setOnClickListener
+                }
+                "请输入验证码" -> {
+                    dialogBinding.editVerifyCode.error = err
+                    return@setOnClickListener
+                }
+                "请输入新密码" -> {
+                    dialogBinding.editPassword.error = err
+                    return@setOnClickListener
+                }
             }
 
-            //密码
-            dialog.dismiss()
+            viewModel.submitPasswordReset(
+                context = requireContext(),
+                progressButton = dialogBinding.ensureButton,
+                email = vm.email.value,
+                code = vm.verifyCode.value,
+                newPassword = vm.newPassword.value
+            ) {
+                dialog.dismiss()
+            }
         }
 
         showStyledDialog(dialog)
-
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.window?.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
+        refreshBtn()
     }
 
     private fun showEditPhoneDialog() {
@@ -174,24 +228,40 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
         dialogBinding.viewModel = vm
         dialogBinding.lifecycleOwner = viewLifecycleOwner
 
+        vm.updateNewPhone(viewModel.phone.value)
+        dialogBinding.editAccount.setText(viewModel.phone.value)
+        dialogBinding.editAccount.setSelection(dialogBinding.editAccount.text?.length ?: 0)
+
+        fun refreshBtn() {
+            val enabled = vm.canSubmit()
+            dialogBinding.ensureButton.isEnabled = enabled
+            dialogBinding.ensureButton.alpha = if (enabled) 1f else 0.5f
+        }
+
+        dialogBinding.editAccount.doAfterTextChanged {
+            vm.updateNewPhone(it?.toString().orEmpty())
+            dialogBinding.editAccount.error = null
+            refreshBtn()
+        }
+
         val dialog = createStyledDialog(dialogBinding.root)
         dialogBinding.ensureButton.setOnClickListener {
-            val newPhone = vm.newPhone.value?.trim().orEmpty()
-            if (newPhone.isEmpty()) {
-                dialogBinding.editAccount.error = "请输入手机号"
+            val err = vm.validate()
+            if (err != null) {
+                dialogBinding.editAccount.error = err
                 return@setOnClickListener
             }
-            //手机号
-            dialog.dismiss()
+            viewModel.updatePhone(
+                context = requireContext(),
+                newPhone = vm.newPhone.value,
+                progressButton = dialogBinding.ensureButton
+            ) {
+                dialog.dismiss()
+            }
         }
 
         showStyledDialog(dialog)
-
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.window?.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
+        refreshBtn()
     }
 
     private fun createStyledDialog(contentView: View): AlertDialog {
