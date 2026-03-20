@@ -1,4 +1,5 @@
 import jdk.javadoc.internal.doclint.DocLint.main
+import org.apache.commons.logging.LogFactory.release
 import org.gradle.kotlin.dsl.implementation
 
 plugins {
@@ -17,7 +18,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        
+        // apache包
+        useLibrary("org.apache.http.legacy")
 
     }
 
@@ -40,6 +42,8 @@ android {
     }
 
 
+
+
 }
 
 dependencies {
@@ -53,7 +57,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.viewpager2)
-    implementation(files("libs/BaiduLBS_Android.aar"))
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -69,11 +73,22 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
-    // SparkChain SDK
+    // SparkChain SDK+百度SDK
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
 
     // 权限请求框架：https://github.com/getActivity/XXPermissions
     implementation("com.github.getActivity:XXPermissions:28.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.jakewharton.retrofit:retrofit2-kotlin-coroutines-adapter:0.9.2")
+    //百度地图SDK
+    //百度地图SDK
+
+    implementation("androidx.cardview:cardview:1.0.0")
+    implementation("androidx.recyclerview:recyclerview:1.2.1")
+    implementation("androidx.lifecycle:lifecycle-extensions:2.2.0")
+    implementation("androidx.legacy:legacy-support-v4:1.0.0")
+    implementation("com.airbnb.android:lottie:3.6.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.4.30")
+    implementation("com.github.bumptech.glide:glide:4.12.0")
+
 }

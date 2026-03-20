@@ -21,9 +21,7 @@ import com.example.ai_belt_mobile.R
 import com.example.ai_belt_mobile.base.BaseFragment
 import com.example.ai_belt_mobile.databinding.FragmentHomeBinding
 import com.example.ai_belt_mobile.ui.fragment.DeviceScanDialogFragment
-import com.example.ai_belt_mobile.voice.BaiduTTSManager
-import com.example.ai_belt_mobile.voice.LocationManager
-import com.example.ai_belt_mobile.voice.NavigationManager
+
 import com.google.android.material.card.MaterialCardView
 import com.hjq.permissions.OnPermissionCallback
 import com.hjq.permissions.XXPermissions
@@ -47,10 +45,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     private lateinit var tvConnectStatus: TextView
     private var scanTimeoutJob: kotlinx.coroutines.Job? = null
 
-    // region 导航模块 - 字段
-    private lateinit var locationManager: LocationManager
-    private lateinit var navigationManager: NavigationManager
-    private lateinit var ttsManager: BaiduTTSManager
+
     
     private val blePermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -72,15 +67,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
 
     // region 导航模块
     private fun initNavigationView() {
-        // 初始化管理器
-        locationManager = LocationManager(requireContext())
-        navigationManager = NavigationManager(requireContext())
-        ttsManager = BaiduTTSManager.getInstance()
-        
-        // 初始化TTS
-        ttsManager.init(requireContext())
         // 初始化导航
-        navigationManager.init()
+        viewModel.initNavigation()
         
         // 导航按钮点击事件
         binding.startNavigationButton.setOnClickListener {
@@ -95,31 +83,31 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
             return
         }
         
-        // 请求定位权限
-        locationManager.requestLocationPermission {
-            if (it) {
-                // 获取当前位置
-                locationManager.getCurrentLocation { location ->
-                    if (location != null) {
-                        // 开始导航
-                        navigationManager.startNavigation(
-                            startLocation = location,
-                            destination = destination,
-                            onNavigationStarted = {
-                                showToast("导航开始，前往$destination")
-                            },
-                            onError = {
-                                showToast("导航失败: $it")
-                            }
-                        )
-                    } else {
-                        showToast("无法获取当前位置")
-                    }
+        // 在Fragment中请求定位权限
+        XXPermissions.with(requireActivity())
+            .permission(PermissionLists.getAccessFineLocationPermission())
+            .permission(PermissionLists.getAccessCoarseLocationPermission())
+            .permission(PermissionLists.getAccessBackgroundLocationPermission())
+            .request(object : OnPermissionCallback {
+                override fun onResult(
+                    grantedList: MutableList<IPermission>,
+                    deniedList: MutableList<IPermission>
+                ) {
+                    val hasPermission = deniedList.isEmpty()
+                    
+                    // 将权限结果传递给ViewModel
+                    viewModel.startNavigation(
+                        destination = destination,
+                        hasLocationPermission = hasPermission,
+                        onNavigationStarted = {
+                            showToast("导航开始，前往$destination")
+                        },
+                        onError = {
+                            showToast("导航失败: $it")
+                        }
+                    )
                 }
-            } else {
-                showToast("需要定位权限才能导航")
-            }
-        }
+            })
     }
     // endregion
 
@@ -289,9 +277,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     override fun onDestroyView() {
         viewModel.stopScan()
         // 释放导航相关资源
-        locationManager.stopLocationUpdates()
-        navigationManager.release()
-        ttsManager.release()
+        viewModel.releaseNavigation()
         super.onDestroyView()
         scope.cancel()
     }

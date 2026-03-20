@@ -7,8 +7,9 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai_belt_mobile.ble.BleManager
-import com.example.ai_belt_mobile.network.RetrofitClient
-import com.example.ai_belt_mobile.repository.SpeakToAiRep
+import com.example.ai_belt_mobile.navigation.LocationManager
+import com.example.ai_belt_mobile.voice.BaiduTTSManager
+import com.example.ai_belt_mobile.navigation.NavigationManager
 import com.example.ai_belt_mobile.utils.AudioRecorderManager
 import com.iflytek.sparkchain.core.asr.ASR
 import com.iflytek.sparkchain.core.asr.AsrCallbacks
@@ -26,6 +27,14 @@ sealed interface HomeBleState {
     data class Connecting(val name: String) : HomeBleState
     data class Connected(val name: String, val battery: Int?) : HomeBleState
     data class Error(val msg: String) : HomeBleState
+}
+
+sealed interface HomeNavigationState {
+    data object Idle : HomeNavigationState
+    data object RequestingPermission : HomeNavigationState
+    data object GettingLocation : HomeNavigationState
+    data object Navigating : HomeNavigationState
+    data class Error(val msg: String) : HomeNavigationState
 }
 
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
@@ -58,6 +67,23 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private val targetMac = "68:25:DD:C3:07:22"
+    // endregion
+    
+    // region 导航模块 - 状态与字段
+    private val _navigationState = MutableStateFlow<HomeNavigationState>(HomeNavigationState.Idle)
+    val navigationState: StateFlow<HomeNavigationState> = _navigationState
+    
+    private val locationManager: LocationManager by lazy {
+        LocationManager(getApplication<Application>().applicationContext)
+    }
+    
+    private val navigationManager: NavigationManager by lazy {
+        NavigationManager(getApplication<Application>().applicationContext)
+    }
+    
+    private val ttsManager: BaiduTTSManager by lazy {
+        BaiduTTSManager.getInstance()
+    }
     // endregion
 
     // region 语音模块 - API
@@ -277,11 +303,74 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
     // endregion
 
+    // region 导航模块 - API
+    fun initNavigation() {
+        ttsManager.init(getApplication<Application>().applicationContext)
+        navigationManager.init()
+    }
+    
+    fun startNavigation(destination: String, hasLocationPermission: Boolean, onNavigationStarted: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                _navigationState.value = HomeNavigationState.RequestingPermission
+                
+                if (hasLocationPermission) {
+                    _navigationState.value = HomeNavigationState.GettingLocation
+                    
+                    // 获取当前位置
+                    locationManager.getCurrentLocation { location ->
+                        if (location != null) {
+                            viewModelScope.launch(Dispatchers.Main) {
+                                _navigationState.value = HomeNavigationState.Navigating
+                                Log.d("HomeViewModel", "当前位置: ${location.latitude}, ${location.longitude}")
+                                // 开始导航
+                                navigationManager.startNavigation(
+                                    startLocation = location,
+                                    destination = destination,
+                                    onNavigationStarted = onNavigationStarted,
+                                    onError = onError
+                                )
+                            }
+                        } else {
+                            viewModelScope.launch(Dispatchers.Main) {
+                                _navigationState.value = HomeNavigationState.Error("无法获取当前位置")
+                                onError("无法获取当前位置")
+                            }
+                        }
+                    }
+                } else {
+                    viewModelScope.launch(Dispatchers.Main) {
+                        _navigationState.value = HomeNavigationState.Error("需要定位权限才能导航")
+                        onError("需要定位权限才能导航")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "导航失败: ${e.message}")
+                viewModelScope.launch(Dispatchers.Main) {
+                    _navigationState.value = HomeNavigationState.Error("导航失败: ${e.message}")
+                    onError("导航失败: ${e.message}")
+                }
+            }
+        }
+    }
+    
+    fun stopNavigation() {
+        _navigationState.value = HomeNavigationState.Idle
+    }
+    
+    fun releaseNavigation() {
+        locationManager.stopLocationUpdates()
+        navigationManager.release()
+        ttsManager.release()
+    }
+    // endregion
+
     override fun onCleared() {
         audioRecorderManager?.stopRecord()
         asr?.stop(true)
         asr = null
         bleManager.disconnect()
+        releaseNavigation()
 
         super.onCleared()
     }
