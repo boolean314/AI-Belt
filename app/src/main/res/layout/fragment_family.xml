@@ -44,7 +44,16 @@
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintEnd_toEndOf="parent">
 
-
+                        <TextView
+                            android:id="@+id/top_address_text"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_margin="16dp"
+                            android:gravity="center"
+                            android:text="点击此区域向残疾人端请求最新地址"
+                            android:textColor="@android:color/white"
+                            android:textSize="20sp"
+                            android:textStyle="bold" />
 
                     </com.google.android.material.card.MaterialCardView>
 
@@ -69,6 +78,7 @@
                     android:layout_height="match_parent">
 
                     <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/warning_card"
                         android:layout_width="match_parent"
                         android:layout_height="0dp"
                         android:layout_weight="0.3"

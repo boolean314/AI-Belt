@@ -29,4 +29,5 @@ class AI_Belt_Application : Application() {
             println("SparkChain init failed, error code: $ret")
         }
     }
+
 }
