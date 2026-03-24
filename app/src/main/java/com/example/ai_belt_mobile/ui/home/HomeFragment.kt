@@ -40,6 +40,7 @@ import com.example.ai_belt_mobile.network.UserRetrofitClient
 import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.network.WsEvent
 import org.json.JSONObject
+import kotlin.code
 import kotlin.text.get
 import kotlin.toString
 
@@ -53,6 +54,9 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     private lateinit var cardConnectStatus: MaterialCardView
     private lateinit var tvConnectStatus: TextView
     private var scanTimeoutJob: kotlinx.coroutines.Job? = null
+    private var sosHoldJob: Job? = null
+    private var sosTriggered = false
+    private val SOS_HOLD_DURATION_MS = 1000L
 
     private val blePermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -294,48 +298,96 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
 
     // endregion
 
+    @SuppressLint("ClickableViewAccessibility")
     private fun initWebSocketDemoActions() {
-        binding.emergencyButton.setOnClickListener {
-            val session = UserSessionStore.get(requireContext())
-            if (session == null) {
-                showToast("未登录，无法发送SOS")
-                return@setOnClickListener
-            }
+        binding.sosHoldProgress.progress = 0
 
-            val sent = WebSocketManager.sendSOS(
-                fromId = session.id.toString(),
-                toId = null, // 后端按紧急联系人转发
-                longitude = "116.4074", // TODO(partner): 替换真实经度
-                latitude = "39.9042",   // TODO(partner): 替换真实纬度
-                time = System.currentTimeMillis().toString()
-            )
-
-            if (!sent) {
-                showToast("SOS发送失败：WebSocket未连接")
-                return@setOnClickListener
-            }
-
-            // 发送成功后，从家属列表里找紧急联系人并直接拨号
-            viewLifecycleOwner.lifecycleScope.launch {
-                try {
-                    val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
-                    if (resp.code != 200) {
-                        showToast("获取家属列表失败：${resp.message}")
-                        return@launch
-                    }
-
-                    val emergencyPhone = resp.data.firstOrNull { it.isEmergency }?.phone.orEmpty()
-                    if (emergencyPhone.isBlank()) {
-                        showToast("未设置紧急联系人，无法拨号")
-                        return@launch
-                    }
-
-                    callEmergencyPhone(emergencyPhone)
-                } catch (e: Exception) {
-                    showToast("获取紧急联系人失败，请稍后重试")
+        binding.emergencyButton.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startSosHold()
+                    true
                 }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    endSosHold(cancelIfNotTriggered = true)
+                    true
+                }
+                else -> false
             }
         }
+    }
+
+    private fun startSosHold() {
+        sosHoldJob?.cancel()
+        sosTriggered = false
+        binding.sosHoldProgress.progress = 0
+
+        sosHoldJob = viewLifecycleOwner.lifecycleScope.launch {
+            val start = android.os.SystemClock.elapsedRealtime()
+
+            while (true) {
+                val elapsed = android.os.SystemClock.elapsedRealtime() - start
+                val ratio = (elapsed.toFloat() / SOS_HOLD_DURATION_MS).coerceIn(0f, 1f)
+                binding.sosHoldProgress.progress = (ratio * 100).toInt()
+
+                if (elapsed >= SOS_HOLD_DURATION_MS) {
+                    sosTriggered = true
+                    triggerSosAction() // 这里调用你现有SOS发送+拨号逻辑
+                    break
+                }
+                kotlinx.coroutines.delay(16L)
+            }
+        }
+    }
+
+    private fun triggerSosAction() {
+        val session = UserSessionStore.get(requireContext())
+        if (session == null) {
+            showToast("未登录，无法发送SOS")
+            return
+        }
+
+        val sent = WebSocketManager.sendSOS(
+            fromId = session.id.toString(),
+            toId = null, // 后端按紧急联系人转发
+            longitude = "116.4074", // TODO(partner): 替换真实经度
+            latitude = "39.9042",   // TODO(partner): 替换真实纬度
+            time = System.currentTimeMillis().toString()
+        )
+
+        if (!sent) {
+            showToast("SOS发送失败：WebSocket未连接")
+            return
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
+                if (resp.code != 200) {
+                    showToast("获取家属列表失败：${resp.message}")
+                    return@launch
+                }
+
+                val emergencyPhone = resp.data.firstOrNull { it.isEmergency }?.phone.orEmpty()
+                if (emergencyPhone.isBlank()) {
+                    showToast("未设置紧急联系人，无法拨号")
+                    return@launch
+                }
+
+                callEmergencyPhone(emergencyPhone)
+            } catch (_: Exception) {
+                showToast("获取紧急联系人失败，请稍后重试")
+            }
+        }
+    }
+
+    private fun endSosHold(cancelIfNotTriggered: Boolean) {
+        if (cancelIfNotTriggered && !sosTriggered) {
+            showToast("已取消SOS")
+        }
+        sosHoldJob?.cancel()
+        sosHoldJob = null
+        binding.sosHoldProgress.progress = 0
     }
 
     private fun callEmergencyPhone(phone: String) {
