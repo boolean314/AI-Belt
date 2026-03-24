@@ -7,9 +7,11 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai_belt_mobile.ble.BleManager
+import com.example.ai_belt_mobile.data.remote.RecognitionRequest
 import com.example.ai_belt_mobile.navigation.LocationManager
 import com.example.ai_belt_mobile.voice.BaiduTTSManager
 import com.example.ai_belt_mobile.navigation.NavigationManager
+import com.example.ai_belt_mobile.repository.SpeakToAiRep
 import com.example.ai_belt_mobile.utils.AudioRecorderManager
 import com.iflytek.sparkchain.core.asr.ASR
 import com.iflytek.sparkchain.core.asr.AsrCallbacks
@@ -21,6 +23,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.ai_belt_mobile.data.remote.AiResponse
 
 sealed interface HomeBleState {
     data object Disconnected : HomeBleState
@@ -72,13 +75,13 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     // region 导航模块 - 状态与字段
     private val _navigationState = MutableStateFlow<HomeNavigationState>(HomeNavigationState.Idle)
     val navigationState: StateFlow<HomeNavigationState> = _navigationState
-    
+
     private val locationManager: LocationManager by lazy {
-        LocationManager(getApplication<Application>().applicationContext)
+        LocationManager(getApplication())
     }
     
     private val navigationManager: NavigationManager by lazy {
-        NavigationManager(getApplication<Application>().applicationContext)
+        NavigationManager.getInstance(getApplication<Application>().applicationContext)
     }
     
     private val ttsManager: BaiduTTSManager by lazy {
@@ -107,16 +110,18 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                     
                     if (status == 2) {
                         isRunning = false
-                        //等ai那边对接
-                        /*viewModelScope.launch(Dispatchers.IO) {
+                        viewModelScope.launch(Dispatchers.IO) {
                             try {
-                                val response = SpeakToAiRep().sendRecognition(result)
-                                Log.d("HomeViewModel", "AI 响应: ${response.want}, ${response.toDo}, ${response.what}")
+                                Log.d("HomeViewModel", "向ai请求: $result")
+                                val response = SpeakToAiRep().sendRecognition(
+                                    RecognitionRequest(result)
+                                )
+                                Log.d("HomeViewModel", "AI 响应: ${response.code}, ${response.message},${response.mean?.want},${response.mean?.where},${response.mean?.what}")
 
                             } catch (e: Exception) {
                                 Log.e("HomeViewModel", "向ai请求失败", e)
                             }
-                        }*/
+                        }
 
 
 
@@ -317,15 +322,16 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
     
     fun startNavigation(destination: String, hasLocationPermission: Boolean, onNavigationStarted: () -> Unit, onError: (String) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.Main) {
             try {
                 _navigationState.value = HomeNavigationState.RequestingPermission
                 
                 if (hasLocationPermission) {
                     _navigationState.value = HomeNavigationState.GettingLocation
-                    
+
+
                     // 获取当前位置
-                    locationManager.getCurrentLocation { location ->
+                    locationManager.getAccurateLocation { location ->
                         if (location != null) {
                             viewModelScope.launch(Dispatchers.Main) {
                                 _navigationState.value = HomeNavigationState.Navigating
@@ -363,10 +369,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     
     fun stopNavigation() {
         _navigationState.value = HomeNavigationState.Idle
+        navigationManager.stopNavigation()
     }
     
     fun releaseNavigation() {
-        locationManager.stopLocationUpdates()
+        locationManager.stop()
         navigationManager.release()
         ttsManager.release()
     }

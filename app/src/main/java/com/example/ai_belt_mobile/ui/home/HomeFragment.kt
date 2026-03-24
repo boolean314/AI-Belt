@@ -295,46 +295,70 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     // endregion
 
     private fun initWebSocketDemoActions() {
-        binding.emergencyButton.setOnClickListener {
+        binding.emergencyButton.setOnLongClickListener {
             val session = UserSessionStore.get(requireContext())
             if (session == null) {
                 showToast("未登录，无法发送SOS")
-                return@setOnClickListener
+                return@setOnLongClickListener true
             }
 
-            val sent = WebSocketManager.sendSOS(
-                fromId = session.id.toString(),
-                toId = null, // 后端按紧急联系人转发
-                longitude = "116.4074", // TODO(partner): 替换真实经度
-                latitude = "39.9042",   // TODO(partner): 替换真实纬度
-                time = System.currentTimeMillis().toString()
-            )
+            // 使用百度内置全量定位获取真实经纬度
+            val locationManager = com.example.ai_belt_mobile.navigation.LocationManager(requireContext())
+            locationManager.getAccurateLocation { location ->
+                if (location == null) {
+                    showToast("获取定位失败")
+                    return@getAccurateLocation
+                }
+                
+                val longitude = location.longitude.toString()
+                val latitude = location.latitude.toString()
 
-            if (!sent) {
-                showToast("SOS发送失败：WebSocket未连接")
-                return@setOnClickListener
-            }
+                val sent = WebSocketManager.sendSOS(
+                    fromId = session.id.toString(),
+                    toId = null, // 后端按紧急联系人转发
+                    longitude = longitude, // 使用真实经度
+                    latitude = latitude,   // 使用真实纬度
+                    time = System.currentTimeMillis().toString()
+                )
 
-            // 发送成功后，从家属列表里找紧急联系人并直接拨号
-            viewLifecycleOwner.lifecycleScope.launch {
-                try {
-                    val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
-                    if (resp.code != 200) {
-                        showToast("获取家属列表失败：${resp.message}")
-                        return@launch
+                if (!sent) {
+                    showToast("SOS发送失败：WebSocket未连接")
+                    return@getAccurateLocation
+                }
+
+                // 发送成功后，从家属列表里找紧急联系人并直接拨号
+                viewLifecycleOwner.lifecycleScope.launch {
+                    try {
+                        val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
+                        if (resp.code != 200) {
+                            showToast("获取家属列表失败：${resp.message}")
+                            return@launch
+                        }
+
+                        val emergencyPhone = resp.data.firstOrNull { it.isEmergency }?.phone.orEmpty()
+                        if (emergencyPhone.isBlank()) {
+                            showToast("未设置紧急联系人，无法拨号")
+                            return@launch
+                        }
+
+                        showToast("正在拨打紧急联系人：$emergencyPhone")
+                        val intent = Intent(Intent.ACTION_DIAL).apply {
+                            data = Uri.parse("tel:$emergencyPhone")
+                        }
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        showToast("网络异常：${e.message}")
                     }
-
-                    val emergencyPhone = resp.data.firstOrNull { it.isEmergency }?.phone.orEmpty()
-                    if (emergencyPhone.isBlank()) {
-                        showToast("未设置紧急联系人，无法拨号")
-                        return@launch
-                    }
-
-                    callEmergencyPhone(emergencyPhone)
-                } catch (e: Exception) {
-                    showToast("获取紧急联系人失败，请稍后重试")
                 }
             }
+
+            showToast("正在获取定位并发送SOS...")
+            true // 返回true表示消费了长按事件
+        }
+
+        // 添加点击事件提示用户需要长按
+        binding.emergencyButton.setOnClickListener {
+            showToast("请长按发送紧急求助")
         }
     }
 

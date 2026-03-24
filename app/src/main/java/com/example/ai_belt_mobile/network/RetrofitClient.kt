@@ -10,7 +10,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 object RetrofitClient {
 
     // 基础 URL，根据实际情况修改
-    private const val BASE_URL = "http://your-api-base-url.com/"
+    private const val BASE_URL = "http://192.168.1.231:8080/"
 
     // 懒加载 Retrofit 实例
     private val retrofit by lazy {
