@@ -9,7 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.ai_belt_mobile.ble.BleManager
 import com.example.ai_belt_mobile.data.remote.RecognitionRequest
 import com.example.ai_belt_mobile.navigation.LocationManager
-import com.example.ai_belt_mobile.voice.BaiduTTSManager
+import com.example.ai_belt_mobile.voice.SparkChainTTSManager
 import com.example.ai_belt_mobile.navigation.NavigationManager
 import com.example.ai_belt_mobile.repository.SpeakToAiRep
 import com.example.ai_belt_mobile.utils.AudioRecorderManager
@@ -84,8 +84,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         NavigationManager.getInstance(getApplication<Application>().applicationContext)
     }
     
-    private val ttsManager: BaiduTTSManager by lazy {
-        BaiduTTSManager.getInstance()
+    private val ttsManager: SparkChainTTSManager by lazy {
+        SparkChainTTSManager.getInstance()
     }
     // endregion
 
@@ -318,18 +318,17 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     // region 导航模块 - API
     fun initNavigation() {
         ttsManager.init(getApplication<Application>().applicationContext)
-        navigationManager.init()
+
     }
-    
+
     fun startNavigation(destination: String, hasLocationPermission: Boolean, onNavigationStarted: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.Main) {
             try {
                 _navigationState.value = HomeNavigationState.RequestingPermission
-                
+
                 if (hasLocationPermission) {
                     _navigationState.value = HomeNavigationState.GettingLocation
-
-
+                    navigationManager.init()
                     // 获取当前位置
                     locationManager.getAccurateLocation { location ->
                         if (location != null) {
@@ -337,7 +336,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                                 _navigationState.value = HomeNavigationState.Navigating
                                 Log.d("HomeViewModel", "当前位置: ${location.latitude}, ${location.longitude}")
                                 // 开始导航
-                                navigationManager.startNavigation(
+                                navigationManager.startWalkingNavigation(
                                     startLocation = location,
                                     destination = destination,
                                     onNavigationStarted = onNavigationStarted,

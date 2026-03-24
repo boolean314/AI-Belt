@@ -18,18 +18,16 @@ import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.network.WsEvent
 import com.google.android.material.card.MaterialCardView
 import kotlinx.coroutines.launch
-import com.baidu.mapapi.map.BaiduMap
-import com.baidu.mapapi.map.BitmapDescriptorFactory
-import com.baidu.mapapi.map.MapStatusUpdateFactory
-import com.baidu.mapapi.map.MapView
-import com.baidu.mapapi.map.MarkerOptions
-import com.baidu.mapapi.model.LatLng
-import com.baidu.mapapi.search.core.SearchResult
-import com.baidu.mapapi.search.geocode.GeoCodeResult
-import com.baidu.mapapi.search.geocode.GeoCoder
-import com.baidu.mapapi.search.geocode.OnGetGeoCoderResultListener
-import com.baidu.mapapi.search.geocode.ReverseGeoCodeOption
-import com.baidu.mapapi.search.geocode.ReverseGeoCodeResult
+import com.amap.api.maps.AMap
+import com.amap.api.maps.MapView
+import com.amap.api.maps.model.MarkerOptions
+import com.amap.api.maps.model.LatLng
+import com.amap.api.services.core.LatLonPoint
+import com.amap.api.services.geocoder.GeocodeSearch
+import com.amap.api.services.geocoder.RegeocodeQuery
+import com.amap.api.services.geocoder.RegeocodeResult
+import com.amap.api.services.geocoder.GeocodeSearch.OnGeocodeSearchListener
+import com.amap.api.services.geocoder.GeocodeResult
 import org.json.JSONObject
 
 class FamilyFragment : Fragment(R.layout.fragment_family) {
@@ -41,10 +39,10 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
     private var boundDisabilityId: String? = null
     private lateinit var emergencyCard: MaterialCardView
     
-    // 百度地图相关
+    // 高德地图相关
     private lateinit var mapView: MapView
-    private lateinit var baiduMap: BaiduMap
-    private var geoCoder: GeoCoder? = null
+    private lateinit var aMap: AMap
+    private var geocodeSearch: GeocodeSearch? = null
 
     // 记录最近一次定位消息的发送者，便于后续请求优先发给最近在线设备
     private var lastSenderDisabilityId: String? = null
@@ -57,11 +55,12 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
         warningText = view.findViewById(R.id.warning_text)
         locationText = view.findViewById(R.id.location_text)
         emergencyCard = view.findViewById(R.id.warning_card)
-        mapView = view.findViewById(R.id.bmapView)
+        mapView = view.findViewById(R.id.mapView)
         
         // 初始化地图
-        baiduMap = mapView.map
-        baiduMap.setMapType(BaiduMap.MAP_TYPE_NORMAL)
+        mapView.onCreate(savedInstanceState)
+        aMap = mapView.map
+        aMap.mapType = AMap.MAP_TYPE_NORMAL
         
         // 初始化地理编码器
         initGeoCoder()
@@ -81,41 +80,42 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
     }
     
     private fun initGeoCoder() {
-        geoCoder = GeoCoder.newInstance()
-        geoCoder?.setOnGetGeoCodeResultListener(object : OnGetGeoCoderResultListener {
-            override fun onGetGeoCodeResult(result: GeoCodeResult?) {
+        geocodeSearch = GeocodeSearch(requireContext())
+        geocodeSearch?.setOnGeocodeSearchListener(object : OnGeocodeSearchListener {
+            override fun onGeocodeSearched(result: GeocodeResult?, errorCode: Int) {
                 // 正向地理编码回调，不需要处理
             }
 
-            override fun onGetReverseGeoCodeResult(result: ReverseGeoCodeResult?) {
-                if (result == null || result.error != SearchResult.ERRORNO.NO_ERROR) {
+            override fun onRegeocodeSearched(result: RegeocodeResult?, errorCode: Int) {
+                if (result == null || errorCode != 1000) {
                     topAddressText.text = "地址解析失败"
                     return
                 }
                 
                 // 解析成功，显示详细地址
-                topAddressText.text = result.address + "\n(" + result.sematicDescription + ")"
+                topAddressText.text = result.regeocodeAddress.formatAddress + "\n(" + result.regeocodeAddress.building + ")"
             }
         })
     }
     
     private fun updateMapLocation(lat: Double, lng: Double) {
         val latLng = LatLng(lat, lng)
+        val latLonPoint = LatLonPoint(lat, lng)
         
         // 清除旧的标记
-        baiduMap.clear()
+        aMap.clear()
         
         // 添加新的标记点
         val markerOptions = MarkerOptions()
             .position(latLng)
-        baiduMap.addOverlay(markerOptions)
+        aMap.addMarker(markerOptions)
         
         // 移动地图视角到该点，并缩放
-        val mapStatusUpdate = MapStatusUpdateFactory.newLatLngZoom(latLng, 18f)
-        baiduMap.animateMapStatus(mapStatusUpdate)
+        aMap.moveCamera(com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(latLng, 18f))
         
         // 发起逆地理编码请求获取中文地址
-        geoCoder?.reverseGeoCode(ReverseGeoCodeOption().location(latLng))
+        val query = RegeocodeQuery(latLonPoint, 200f, GeocodeSearch.AMAP)
+        geocodeSearch?.getFromLocationAsyn(query)
     }
 
     private fun requestLocationFromDisability() {
@@ -246,9 +246,10 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
                     // 心跳响应，忽略即可
                 }
             }
-        } catch (_: Exception) {
-            // JSON格式异常可按需打日志
-        }
+            } catch (e: Exception) {
+                // JSON格式异常可按需打日志
+                e.printStackTrace()
+            }
     }
 
     private fun toast(msg: String) {
@@ -295,7 +296,6 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        geoCoder?.destroy()
         mapView.onDestroy()
     }
 
