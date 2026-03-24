@@ -6,20 +6,43 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import com.example.ai_belt_mobile.databinding.ActivityFamilyMainBinding
+import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.ui.family.FamilyFragment
 import com.example.ai_belt_mobile.ui.family.FamilyProfileFragment
 import com.example.ai_belt_mobile.ui.home.HomeFragment
 import com.example.ai_belt_mobile.ui.home.ProfileFragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import android.widget.Toast
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import com.example.ai_belt_mobile.network.WsEvent
+import kotlinx.coroutines.launch
+import com.example.ai_belt_mobile.MainActivity
 
 class FamilyMainActivity : AppCompatActivity() {
 
     private lateinit var viewPager: ViewPager2
     private lateinit var bottomNav: BottomNavigationView
     private lateinit var binding: ActivityFamilyMainBinding
+    private var wsConnectedToastShown = false
+
+    override fun onStart() {
+        super.onStart()
+        val session = com.example.ai_belt_mobile.data.local.UserSessionStore.get(this)
+        if (session != null) {
+            WebSocketManager.connect(session.id, session.identity)
+        }
+    }
+
+    override fun onStop() {
+        WebSocketManager.disconnect()
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,6 +60,8 @@ class FamilyMainActivity : AppCompatActivity() {
 
         setupViewPager()
         setupBottomNav()
+
+        observeWsConnectionTip()
     }
 
     private fun setupViewPager() {
@@ -72,6 +97,27 @@ class FamilyMainActivity : AppCompatActivity() {
                 0 -> FamilyFragment() as Fragment
                 1 -> FamilyProfileFragment() as Fragment
                 else -> FamilyFragment() as Fragment
+            }
+        }
+    }
+
+    private fun observeWsConnectionTip() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                WebSocketManager.events.collect { event ->
+                    when (event) {
+                        is WsEvent.Opened -> {
+                            if (!wsConnectedToastShown) {
+                                Toast.makeText(this@FamilyMainActivity, "WebSocket连接成功", Toast.LENGTH_SHORT).show()
+                                wsConnectedToastShown = true
+                            }
+                        }
+                        is WsEvent.Error -> {
+                            Toast.makeText(this@FamilyMainActivity, "WebSocket连接失败", Toast.LENGTH_SHORT).show()
+                        }
+                        else -> Unit
+                    }
+                }
             }
         }
     }
