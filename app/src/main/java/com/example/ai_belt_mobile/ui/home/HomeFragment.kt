@@ -36,6 +36,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import com.example.ai_belt_mobile.data.local.UserSessionStore
+import com.example.ai_belt_mobile.navigation.WalkNaviActivity
 import com.example.ai_belt_mobile.network.UserRetrofitClient
 import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.network.WsEvent
@@ -103,13 +104,17 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                     deniedList: MutableList<IPermission>
                 ) {
                     val hasPermission = deniedList.isEmpty()
-                    
+
                     // 将权限结果传递给ViewModel
                     viewModel.startNavigation(
                         destination = destination,
                         hasLocationPermission = hasPermission,
                         onNavigationStarted = {
                             showToast("导航开始，前往$destination")
+                            // 启动导航页面
+                            val intent = Intent(requireContext(), WalkNaviActivity::class.java)
+                            intent.putExtra("destination", destination)
+                            startActivity(intent)
                         },
                         onError = {
                             showToast("导航失败: $it")
@@ -302,7 +307,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                 return@setOnLongClickListener true
             }
 
-            // 使用百度内置全量定位获取真实经纬度
+            // 使用高德内置全量定位获取真实经纬度
             val locationManager = com.example.ai_belt_mobile.navigation.LocationManager(requireContext())
             locationManager.getAccurateLocation { location ->
                 if (location == null) {
