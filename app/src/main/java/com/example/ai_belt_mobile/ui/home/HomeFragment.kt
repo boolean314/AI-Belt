@@ -3,8 +3,10 @@ package com.example.ai_belt_mobile.ui.home
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.view.MotionEvent
@@ -33,6 +35,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import com.example.ai_belt_mobile.data.local.UserSessionStore
+import com.example.ai_belt_mobile.network.UserRetrofitClient
+import com.example.ai_belt_mobile.network.WebSocketManager
+import com.example.ai_belt_mobile.network.WsEvent
+import org.json.JSONObject
+import kotlin.text.get
+import kotlin.toString
 
 class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragment.Callbacks {
 
@@ -45,8 +54,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     private lateinit var tvConnectStatus: TextView
     private var scanTimeoutJob: kotlinx.coroutines.Job? = null
 
-
-    
     private val blePermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
             if (result.values.all { it }) {
@@ -63,6 +70,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
         initVoiceView()
         initBleView()
         initNavigationView()
+
+        initWebSocketDemoActions()
     }
 
     // region 导航模块
@@ -114,6 +123,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     override fun initData() {
         observeVoiceState()
         observeBleState()
+        observeWsRequestAndReplyLocation()
     }
 
     // region 语音模块
@@ -283,4 +293,117 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     }
 
     // endregion
+
+    private fun initWebSocketDemoActions() {
+        binding.emergencyButton.setOnClickListener {
+            val session = UserSessionStore.get(requireContext())
+            if (session == null) {
+                showToast("未登录，无法发送SOS")
+                return@setOnClickListener
+            }
+
+            val sent = WebSocketManager.sendSOS(
+                fromId = session.id.toString(),
+                toId = null, // 后端按紧急联系人转发
+                longitude = "116.4074", // TODO(partner): 替换真实经度
+                latitude = "39.9042",   // TODO(partner): 替换真实纬度
+                time = System.currentTimeMillis().toString()
+            )
+
+            if (!sent) {
+                showToast("SOS发送失败：WebSocket未连接")
+                return@setOnClickListener
+            }
+
+            // 发送成功后，从家属列表里找紧急联系人并直接拨号
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
+                    if (resp.code != 200) {
+                        showToast("获取家属列表失败：${resp.message}")
+                        return@launch
+                    }
+
+                    val emergencyPhone = resp.data.firstOrNull { it.isEmergency }?.phone.orEmpty()
+                    if (emergencyPhone.isBlank()) {
+                        showToast("未设置紧急联系人，无法拨号")
+                        return@launch
+                    }
+
+                    callEmergencyPhone(emergencyPhone)
+                } catch (e: Exception) {
+                    showToast("获取紧急联系人失败，请稍后重试")
+                }
+            }
+        }
+    }
+
+    private fun callEmergencyPhone(phone: String) {
+        val target = phone.trim()
+        if (target.isEmpty()) {
+            showToast("紧急联系人号码为空")
+            return
+        }
+
+        XXPermissions.with(requireActivity())
+            .permission(PermissionLists.getCallPhonePermission())
+            .request(object : OnPermissionCallback {
+                override fun onResult(
+                    grantedList: MutableList<IPermission>,
+                    deniedList: MutableList<IPermission>
+                ) {
+                    if (deniedList.isNotEmpty()) {
+                        // 无权限时降级到拨号盘，避免误报“获取失败”
+                        startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$target")))
+                        showToast("未授予通话权限，已打开拨号界面")
+                        return
+                    }
+
+                    try {
+                        startActivity(Intent(Intent.ACTION_CALL, Uri.parse("tel:$target")))
+                    } catch (e: Exception) {
+                        showToast("拨号失败：${e.message ?: "请稍后重试"}")
+                    }
+                }
+            })
+    }
+
+    private fun observeWsRequestAndReplyLocation() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                WebSocketManager.events.collect { event ->
+                    if (event !is WsEvent.Message) return@collect
+
+                    try {
+                        val root = JSONObject(event.text)
+                        if (root.optString("type") != "request") return@collect
+
+                        val session = UserSessionStore.get(requireContext()) ?: return@collect
+                        val myId = session.id.toString()
+                        val toId = root.optString("toId")
+                        if (toId != myId) return@collect
+
+                        val fromFamilyId = root.optString("fromId")
+                        if (fromFamilyId.isBlank()) return@collect
+
+                        val ok = WebSocketManager.sendLocation(
+                            fromId = myId,
+                            toId = fromFamilyId,
+                            longitude = "116.4074", // TODO(partner): 替换为真实GPS经度
+                            latitude = "39.9042",   // TODO(partner): 替换为真实GPS纬度
+                            time = System.currentTimeMillis().toString() // TODO(partner): 替换为真实定位时间
+                        )
+
+                        if (ok) {
+                            showToast("已响应家属定位请求")
+                        } else {
+                            showToast("定位响应失败：WebSocket未连接")
+                        }
+                    } catch (_: Exception) {
+                        //忽略非JSON或非协议消息
+                    }
+                }
+            }
+        }
+    }
 }

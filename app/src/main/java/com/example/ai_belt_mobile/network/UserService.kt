@@ -6,6 +6,7 @@ import com.example.ai_belt_mobile.data.model.ChangePassword
 import com.example.ai_belt_mobile.data.model.ChangePasswordResponse
 import com.example.ai_belt_mobile.data.model.ForgetPassword
 import com.example.ai_belt_mobile.data.model.ForgetPasswordResponse
+import com.example.ai_belt_mobile.data.model.GetDisabilityResponse
 import com.example.ai_belt_mobile.data.model.GetFamily
 import com.example.ai_belt_mobile.data.model.GetFamilyResponse
 import com.example.ai_belt_mobile.data.model.GetVerifyCode
@@ -71,4 +72,8 @@ interface UserService {
         @Body body: UpdateProfile
     ) : UpdateProfileResponse
 
+    @GET("family/{id}/disability")      //用于家属获取绑定的残疾人信息
+    suspend fun getDisabilityInfo(
+        @Path("id") id: Int,
+    ) : GetDisabilityResponse
 }
