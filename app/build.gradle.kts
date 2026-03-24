@@ -20,6 +20,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // apache包
         useLibrary("org.apache.http.legacy")
+        
 
     }
 
@@ -79,6 +80,8 @@ dependencies {
     // 权限请求框架：https://github.com/getActivity/XXPermissions
     implementation("com.github.getActivity:XXPermissions:28.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    //内部自动解析为JSON
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.jakewharton.retrofit:retrofit2-kotlin-coroutines-adapter:0.9.2")
     //百度地图SDK
     //百度地图SDK
@@ -90,5 +93,7 @@ dependencies {
     implementation("com.airbnb.android:lottie:3.6.0")
     implementation("org.jetbrains.kotlin:kotlin-stdlib:1.4.30")
     implementation("com.github.bumptech.glide:glide:4.12.0")
+
+   // implementation("com.google.android.gms:play-services-location:21.0.1")高精度定位比原生的LocationManager精准但是谷歌服务框架大部分国产手机用不了
 
 }
