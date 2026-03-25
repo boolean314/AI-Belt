@@ -1,144 +1,200 @@
 package com.example.ai_belt_mobile.navigation
 
-import android.graphics.drawable.Drawable
+import android.Manifest
+import android.content.pm.PackageManager
+import android.location.Location
 import android.os.Bundle
-import android.os.Message
 import android.util.Log
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.baidu.mapapi.walknavi.WalkNavigateHelper
-import com.baidu.mapapi.walknavi.adapter.IWRouteGuidanceListener
-import com.baidu.mapapi.walknavi.model.IWRouteIconInfo
-import com.baidu.mapapi.walknavi.model.RouteGuideKind
-import com.baidu.mapapi.walknavi.model.WalkSimpleMapInfo
-import com.example.ai_belt_mobile.voice.BaiduTTSManager
+import androidx.core.app.ActivityCompat
+import com.amap.api.navi.AMapNaviView
+import com.amap.api.navi.AMapNaviViewListener
+import com.amap.api.navi.AMapNaviViewOptions
+import com.amap.api.navi.AmapPageType
+import com.amap.api.navi.enums.NaviType
+import com.example.ai_belt_mobile.voice.SparkChainTTSManager
 
 /**
- * 步行导航Activity
- * 用于显示导航界面和处理导航状态
+ * 步行导航Activity (高德地图版)
  */
-class WalkNaviActivity : AppCompatActivity() {
+class WalkNaviActivity : AppCompatActivity(), NavigationManager.BeltNavigationCallback {
 
-    private lateinit var walkNavigateHelper: WalkNavigateHelper
-    private val ttsManager = BaiduTTSManager.getInstance()
+    private lateinit var navigationManager: NavigationManager
+    private lateinit var mAMapNaviView: AMapNaviView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1. 获取步行导航助手实例
-        walkNavigateHelper = WalkNavigateHelper.getInstance()
-
-        // 2. 创建导航视图并设置为内容视图
-        val view = walkNavigateHelper.onCreate(this)
-        setContentView(view)
-
-        // 3. 设置导航状态监听器
-        setRouteGuidanceListener()
-
-        // 4. 开始步行导航
-        startWalkNavi()
-    }
-
-    /**
-     * 设置导航状态监听器
-     */
-    private fun setRouteGuidanceListener() {
-        walkNavigateHelper.setRouteGuidanceListener(
-            this,
-            object : IWRouteGuidanceListener {
-
-                override fun onRoadGuideTextUpdate(
-                    p0: CharSequence?,
-                    p1: CharSequence?
-                ) {
-                    val text = p1?.toString() ?: p0?.toString()
-                    text?.let {
-                        Log.i("导航", "导航指令: $it")
-                        ttsManager.speak(it)
-                    }
-                }
-
-                // ✅ CharSequence版本
-                override fun onRemainDistanceUpdate(p0: CharSequence?) {
-                    Log.i("导航", "剩余距离: $p0")
-                }
-
-                // ✅ Int版本（必须写）
-                override fun onRemainDistanceUpdate(p0: Int) {
-                    Log.i("导航", "剩余距离(int): $p0")
-                }
-
-                // ✅ CharSequence版本
-                override fun onRemainTimeUpdate(p0: CharSequence?) {
-                    Log.i("导航", "剩余时间: $p0")
-                }
-
-                // ✅ Int版本（必须写）
-                override fun onRemainTimeUpdate(p0: Int) {
-                    Log.i("导航", "剩余时间(int): $p0")
-                }
-
-                override fun onArriveDest() {
-                    Log.i("导航", "已到达目的地")
-                    ttsManager.speak("已到达目的地")
-                }
-
-                override fun onReRouteComplete() {
-                    ttsManager.speak("路线已更新")
-                }
-
-                override fun onRouteGuideIconUpdate(p0: Drawable?) {}
-
-                override fun onRouteGuideKind(p0: RouteGuideKind?) {}
-
-                override fun onRouteGuideIconInfoUpdate(p0: IWRouteIconInfo?) {}
-
-                override fun onGpsStatusChange(p0: CharSequence?, p1: Drawable?) {}
-
-                override fun onRouteFarAway(p0: CharSequence?, p1: Drawable?) {}
-
-                override fun onRoutePlanYawing(p0: CharSequence?, p1: Drawable?) {}
-
-                override fun onIndoorEnd(p0: Message?) {}
-
-                override fun onFinalEnd(p0: Message?) {}
-
-                override fun onVibrate() {}
-
-                override fun onNaviLocationUpdate() {}
-
-                override fun onSimpleMapInfoUpdate(p0: WalkSimpleMapInfo?) {}
-            }
-        )
-    }
-
-    /**
-     * 开始步行导航
-     */
-    private fun startWalkNavi() {
-        try {
-            walkNavigateHelper.startWalkNavi(this)
-            Log.i("导航", "步行导航已开始")
-        } catch (e: Exception) {
-            Log.e("导航", "开始步行导航失败", e)
-            ttsManager.speak("开始步行导航失败")
+        // 检查定位权限
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.e("WalkNaviActivity", "定位权限未授予")
+            Toast.makeText(this, "需要定位权限进行导航", Toast.LENGTH_SHORT).show()
+            finish()
+            return
         }
+        // 创建高德导航视图并设置为ContentView
+        mAMapNaviView = AMapNaviView(this)
+        mAMapNaviView.onCreate(savedInstanceState)
+        setContentView(mAMapNaviView)
+        mAMapNaviView.viewOptions = AMapNaviViewOptions().apply {
+            isRouteListButtonShow = false
+            isSettingMenuEnabled = false
+            isAutoDrawRoute = true
+
+        }
+        mAMapNaviView.setAMapNaviViewListener(object : AMapNaviViewListener {
+            override fun onNaviSetting() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNaviCancel() {
+                finish()
+
+            }
+
+            override fun onNaviBackClick(): Boolean {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNaviMapMode(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNaviTurnClick() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNextRoadClick() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onScanViewButtonClick() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onLockMap(p0: Boolean) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNaviViewLoaded() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onMapTypeChanged(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNaviViewShowMode(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onStopSpeaking() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onViewTypeChanged(p0: AmapPageType?) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onAMapNaviViewExit() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onStrategyChanged(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onBroadcastModeChanged(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onDayAndNightModeChanged(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onScaleAutoChanged(p0: Boolean) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onListenToVoiceDuringCallChanged(p0: Boolean) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onControlMusicVolumeModeChanged(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onEagleChanged(p0: Boolean) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNaviRouteHighlightChange(p0: Long, p1: Int) {
+                TODO("Not yet implemented")
+            }
+
+        })
+
+        // 初始化导航管理器,一次启动后退出会把
+        navigationManager = NavigationManager.getInstance(this)
+        navigationManager.init()
+        navigationManager.beltCallback = this
+
+
+
     }
+
+
+
+
+
+    // --- BeltNavigationCallback 实现 ---
+    override fun onBeltNavigationUpdate(relativeAngle: Float, distance: Int) {
+        Log.i("WalkNaviActivity", "=== 收到腰带导航数据 ===")
+        Log.i("WalkNaviActivity", "相对偏角: $relativeAngle, 距离: $distance 米")
+
+        // TODO: 在这里将 relativeAngle 和 distance 发送给智能腰带 (通过蓝牙)
+
+    }
+
+    override fun onNaviTextUpdate(text: String) {
+        // 导航管理器已经调用了TTS播报，这里可以更新UI或发送给腰带提示
+    }
+
+    override fun onNaviStart() {
+        Log.i("WalkNaviActivity", "导航已真正开始")
+    }
+
+    override fun onNaviStop() {
+        Log.i("WalkNaviActivity", "导航已结束")
+        finish()
+    }
+
+
+    // --- 生命周期管理 ---
 
     override fun onResume() {
         super.onResume()
-        // 恢复导航
-        walkNavigateHelper.resume()
+        mAMapNaviView.onResume()
     }
 
     override fun onPause() {
         super.onPause()
-        // 暂停导航
-        walkNavigateHelper.pause()
+        mAMapNaviView.onPause()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        // 退出导航
-        walkNavigateHelper.quit()
+        mAMapNaviView.onDestroy()
+        navigationManager.beltCallback = null
+        navigationManager.release()
+        Log.i("WalkNaviActivity", "导航页面已销毁，导航已停止")
     }
 }

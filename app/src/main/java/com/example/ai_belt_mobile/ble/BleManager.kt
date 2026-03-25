@@ -10,6 +10,7 @@ import android.os.ParcelUuid
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import java.util.UUID
+import kotlin.and
 import kotlin.toString
 
 class BleManager(
@@ -22,6 +23,7 @@ class BleManager(
         fun onDisconnected()
         fun onMessage(bytes: ByteArray)
         fun onError(msg: String)
+        fun onNotifyReady() // 新增：CCCD写成功后通知上层
     }
 
     private val adapter: BluetoothAdapter? =
@@ -32,7 +34,7 @@ class BleManager(
     companion object {
         val SERVICE_UUID: UUID = UUID.fromString("4fafc201-1fb5-459e-8fcc-c5c9c331914b")
         val WRITE_UUID: UUID = UUID.fromString("beb5483e-36e1-4688-b7f5-ea07361b26a8")
-        val NOTIFY_UUID: UUID = UUID.fromString("beb5483e-36e1-4688-b7f5-ea07361b26a8")
+        val NOTIFY_UUID: UUID = UUID.fromString("beb5483e-36e1-4688-b7f5-ea07361b26a9")
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }
 
@@ -83,12 +85,21 @@ class BleManager(
 
     @SuppressLint("MissingPermission")
     fun write(data: ByteArray) {
-        val g = gatt ?: return
-        val service = g.getService(SERVICE_UUID) ?: return
-        val ch = service.getCharacteristic(WRITE_UUID) ?: return
+        val g = gatt ?: run {
+            listener.onError("write failed: gatt null")
+            return
+        }
+        val service = g.getService(SERVICE_UUID) ?: run {
+            listener.onError("write failed: service null")
+            return
+        }
+        val ch = service.getCharacteristic(WRITE_UUID) ?: run {
+            listener.onError("write failed: char null")
+            return
+        }
         ch.value = data
-        g.writeCharacteristic(ch)
-        Log.d("BLE_TX", "send=${data.toString(Charsets.UTF_8)} len=${data.size}")
+        val ok = g.writeCharacteristic(ch)
+        Log.d("BLE_TX", "send=${data.toString(Charsets.UTF_8)} len=${data.size}, ok=$ok")
     }
 
     @SuppressLint("MissingPermission")
@@ -109,19 +120,64 @@ class BleManager(
 
         @SuppressLint("MissingPermission")
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
-            if (status != BluetoothGatt.GATT_SUCCESS) return
-            val service = g.getService(SERVICE_UUID) ?: return
-            val notifyChar = service.getCharacteristic(NOTIFY_UUID) ?: return
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                listener.onError("discoverServices failed: $status")
+                return
+            }
+            val service = g.getService(SERVICE_UUID) ?: run {
+                listener.onError("service not found: $SERVICE_UUID")
+                return
+            }
+            val notifyChar = service.getCharacteristic(NOTIFY_UUID) ?: run {
+                listener.onError("notify char not found: $NOTIFY_UUID")
+                return
+            }
+            Log.d("BLE_DBG", "notifyChar=${notifyChar.uuid}, props=0x${notifyChar.properties.toString(16)}")
+            notifyChar.descriptors.forEach { d ->
+                Log.d("BLE_DBG", "desc=${d.uuid}")
+            }
 
             g.setCharacteristicNotification(notifyChar, true)
-            val cccd = notifyChar.getDescriptor(CCCD_UUID) ?: return
-            cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-            g.writeDescriptor(cccd)
+
+            val cccd = notifyChar.getDescriptor(CCCD_UUID) ?: run {
+                listener.onError("CCCD not found")
+                return
+            }
+
+            val props = notifyChar.properties
+            val useIndicate = (props and BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0
+            val useNotify = (props and BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0
+
+            cccd.value = when {
+                useNotify -> BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                useIndicate -> BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+                else -> {
+                    listener.onError("char has no NOTIFY/INDICATE property")
+                    return
+                }
+            }
+
+            val ok = g.writeDescriptor(cccd)
+            Log.d("BLE_SUB", "write CCCD start ok=$ok, mode=${if (useNotify) "NOTIFY" else "INDICATE"}")
+        }
+
+        @SuppressLint("MissingPermission")
+        override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+            Log.d("BLE_SUB", "onDescriptorWrite uuid=${descriptor.uuid}, status=$status")
+            if (descriptor.uuid == CCCD_UUID && status == BluetoothGatt.GATT_SUCCESS) {
+                listener.onNotifyReady()
+            } else if (descriptor.uuid == CCCD_UUID) {
+                listener.onError("CCCD write failed: $status")
+            }
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
-            if (ch.uuid == NOTIFY_UUID) listener.onMessage(ch.value ?: ByteArray(0))
+            val value = ch.value ?: ByteArray(0)
+            Log.d("BLE_RX_RAW", "uuid=${ch.uuid}, len=${value.size}")
+            if (ch.uuid == NOTIFY_UUID) listener.onMessage(value)
         }
+
+
     }
 
     @SuppressLint("MissingPermission")

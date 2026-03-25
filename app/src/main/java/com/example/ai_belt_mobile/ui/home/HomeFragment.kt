@@ -36,6 +36,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import com.example.ai_belt_mobile.data.local.UserSessionStore
+import com.example.ai_belt_mobile.navigation.WalkNaviActivity
 import com.example.ai_belt_mobile.network.UserRetrofitClient
 import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.network.WsEvent
@@ -57,6 +58,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     private var sosHoldJob: Job? = null
     private var sosTriggered = false
     private val SOS_HOLD_DURATION_MS = 1000L
+    private var lastEmergencyDialogTs = 0L
 
     private val blePermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -82,7 +84,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     private fun initNavigationView() {
         // 初始化导航
         viewModel.initNavigation()
-        
+
         // 导航按钮点击事件
         binding.startNavigationButton.setOnClickListener {
             startNavigation()
@@ -95,7 +97,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
             showToast("请输入目的地")
             return
         }
-        
+
         // 在Fragment中请求定位权限
         XXPermissions.with(requireActivity())
             .permission(PermissionLists.getAccessFineLocationPermission())
@@ -107,13 +109,17 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                     deniedList: MutableList<IPermission>
                 ) {
                     val hasPermission = deniedList.isEmpty()
-                    
+
                     // 将权限结果传递给ViewModel
                     viewModel.startNavigation(
                         destination = destination,
                         hasLocationPermission = hasPermission,
                         onNavigationStarted = {
                             showToast("导航开始，前往$destination")
+                            // 启动导航页面
+                            val intent = Intent(requireContext(), WalkNaviActivity::class.java)
+                            intent.putExtra("destination", destination)
+                            startActivity(intent)
                         },
                         onError = {
                             showToast("导航失败: $it")
@@ -128,6 +134,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
         observeVoiceState()
         observeBleState()
         observeWsRequestAndReplyLocation()
+        observeBleEmergency()
     }
 
     // region 语音模块
@@ -141,12 +148,14 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                     showVoiceInputPopup()
                     true
                 }
+
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     // 抬起或取消时停止识别
                     viewModel.stopVoiceRecognition()
                     hideVoiceInputPopup()
                     true
                 }
+
                 else -> false
             }
         }
@@ -157,8 +166,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
         scope.launch {
             viewModel.recognitionResult.collect {
                 // 这里可以更新UI显示识别结果
-                if(it.contains("识别出错"))
-                showToast(it)
+                if (it.contains("识别出错"))
+                    showToast(it)
             }
         }
     }
@@ -211,6 +220,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                             val batteryText = state.battery?.let { "$it%" } ?: "--%"
                             "剩余电量：$batteryText"
                         }
+
                         is HomeBleState.Error -> "连接异常：${state.msg}"
                     }
                 }
@@ -308,10 +318,12 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                     startSosHold()
                     true
                 }
+
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     endSosHold(cancelIfNotTriggered = true)
                     true
                 }
+
                 else -> false
             }
         }
@@ -347,36 +359,49 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
             return
         }
 
-        val sent = WebSocketManager.sendSOS(
-            fromId = session.id.toString(),
-            toId = null, // 后端按紧急联系人转发
-            longitude = "116.4074", // TODO(partner): 替换真实经度
-            latitude = "39.9042",   // TODO(partner): 替换真实纬度
-            time = System.currentTimeMillis().toString()
-        )
+        val locationManager =
+            com.example.ai_belt_mobile.navigation.LocationManager(requireContext())
+        locationManager.getAccurateLocation { location ->
+            // 定位失败也继续发送：经纬度置空
+            val longitude = location?.longitude?.toString().orEmpty()
+            val latitude = location?.latitude?.toString().orEmpty()
 
-        if (!sent) {
-            showToast("SOS发送失败：WebSocket未连接")
-            return
-        }
+            if (location == null) {
+                showToast("定位失败，已发送空定位并继续拨号")
+            }
 
-        viewLifecycleOwner.lifecycleScope.launch {
-            try {
-                val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
-                if (resp.code != 200) {
-                    showToast("获取家属列表失败：${resp.message}")
-                    return@launch
+            val sent = WebSocketManager.sendSOS(
+                fromId = session.id.toString(),
+                toId = null, // 后端按紧急联系人转发
+                longitude = longitude,
+                latitude = latitude,
+                time = System.currentTimeMillis().toString()
+            )
+
+            if (!sent) {
+                showToast("SOS发送失败：WebSocket未连接")
+                return@getAccurateLocation
+            }
+
+            // 无论定位是否成功，只要SOS发送成功就继续找紧急联系人拨号
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
+                    if (resp.code != 200) {
+                        showToast("获取家属列表失败：${resp.message}")
+                        return@launch
+                    }
+
+                    val emergencyPhone = resp.data.firstOrNull { it.isEmergency }?.phone.orEmpty()
+                    if (emergencyPhone.isBlank()) {
+                        showToast("未设置紧急联系人，无法拨号")
+                        return@launch
+                    }
+
+                    callEmergencyPhone(emergencyPhone)
+                } catch (_: Exception) {
+                    showToast("获取紧急联系人失败，请稍后重试")
                 }
-
-                val emergencyPhone = resp.data.firstOrNull { it.isEmergency }?.phone.orEmpty()
-                if (emergencyPhone.isBlank()) {
-                    showToast("未设置紧急联系人，无法拨号")
-                    return@launch
-                }
-
-                callEmergencyPhone(emergencyPhone)
-            } catch (_: Exception) {
-                showToast("获取紧急联系人失败，请稍后重试")
             }
         }
     }
@@ -384,10 +409,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     private fun endSosHold(cancelIfNotTriggered: Boolean) {
         if (cancelIfNotTriggered && !sosTriggered) {
             showToast("已取消SOS")
+            sosHoldJob?.cancel()
+            sosHoldJob = null
+            binding.sosHoldProgress.progress = 0
         }
-        sosHoldJob?.cancel()
-        sosHoldJob = null
-        binding.sosHoldProgress.progress = 0
     }
 
     private fun callEmergencyPhone(phone: String) {
@@ -421,41 +446,80 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     }
 
     private fun observeWsRequestAndReplyLocation() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                WebSocketManager.events.collect { event ->
-                    if (event !is WsEvent.Message) return@collect
+        val locationManager =
+            com.example.ai_belt_mobile.navigation.LocationManager(requireContext())
+        locationManager.getAccurateLocation { location ->
+            val lng = location?.longitude?.toString().orEmpty()
+            val lat = location?.latitude?.toString().orEmpty()
 
-                    try {
-                        val root = JSONObject(event.text)
-                        if (root.optString("type") != "request") return@collect
+            viewLifecycleOwner.lifecycleScope.launch {
+                viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    WebSocketManager.events.collect { event ->
+                        if (event !is WsEvent.Message) return@collect
 
-                        val session = UserSessionStore.get(requireContext()) ?: return@collect
-                        val myId = session.id.toString()
-                        val toId = root.optString("toId")
-                        if (toId != myId) return@collect
+                        try {
+                            val root = JSONObject(event.text)
+                            if (root.optString("type") != "request") return@collect
 
-                        val fromFamilyId = root.optString("fromId")
-                        if (fromFamilyId.isBlank()) return@collect
+                            val session = UserSessionStore.get(requireContext()) ?: return@collect
+                            val myId = session.id.toString()
+                            val toId = root.optString("toId")
+                            if (toId != myId) return@collect
 
-                        val ok = WebSocketManager.sendLocation(
-                            fromId = myId,
-                            toId = fromFamilyId,
-                            longitude = "116.4074", // TODO(partner): 替换为真实GPS经度
-                            latitude = "39.9042",   // TODO(partner): 替换为真实GPS纬度
-                            time = System.currentTimeMillis().toString() // TODO(partner): 替换为真实定位时间
-                        )
+                            val fromFamilyId = root.optString("fromId")
+                            if (fromFamilyId.isBlank()) return@collect
 
-                        if (ok) {
-                            showToast("已响应家属定位请求")
-                        } else {
-                            showToast("定位响应失败：WebSocket未连接")
+                            val ok = WebSocketManager.sendLocation(
+                                fromId = myId,
+                                toId = fromFamilyId,
+                                longitude = lng, // 定位失败时为空字符串
+                                latitude = lat,  // 定位失败时为空字符串
+                                time = System.currentTimeMillis().toString()
+                            )
+
+                            if (ok) {
+                                if (location == null) showToast("定位失败，已返回空定位")
+                                else showToast("已响应家属定位请求")
+                            } else {
+                                showToast("定位响应失败：WebSocket未连接")
+                            }
+                        } catch (_: Exception) {
+                            //忽略非JSON或非协议消息
                         }
-                    } catch (_: Exception) {
-                        //忽略非JSON或非协议消息
                     }
                 }
             }
         }
+    }
+
+    private fun observeBleEmergency() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.bleEmergencyEvents.collect {
+                    // 简单防抖，避免设备短时间重复上报导致连续弹窗
+                    val now = System.currentTimeMillis()
+                    if (now - lastEmergencyDialogTs < 2000) return@collect
+                    lastEmergencyDialogTs = now
+                    showEmergencyHelpDialog()
+                }
+            }
+        }
+    }
+
+    private fun showEmergencyHelpDialog() {
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("紧急提醒")
+            .setMessage("检测到紧急情况，是否需要帮助？")
+            .setCancelable(false)
+            .setPositiveButton("需要帮助") { _, _ ->
+                // TODO(voice): 这里接语音播报/语音确认流程（负责语音的同学补）
+                // TODO: 这里可触发 SOS 发送 / 呼叫紧急联系人等联动
+                showToast("已确认需要帮助")
+            }
+            .setNegativeButton("暂时不用") { _, _ ->
+                // TODO(voice): 这里可接“已拒绝帮助”的语音反馈
+                showToast("已记录：暂时不需要帮助")
+            }
+            .show()
     }
 }

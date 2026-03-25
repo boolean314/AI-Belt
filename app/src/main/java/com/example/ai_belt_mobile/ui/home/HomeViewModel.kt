@@ -7,9 +7,11 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai_belt_mobile.ble.BleManager
+import com.example.ai_belt_mobile.data.remote.RecognitionRequest
 import com.example.ai_belt_mobile.navigation.LocationManager
-import com.example.ai_belt_mobile.voice.BaiduTTSManager
+import com.example.ai_belt_mobile.voice.SparkChainTTSManager
 import com.example.ai_belt_mobile.navigation.NavigationManager
+import com.example.ai_belt_mobile.repository.SpeakToAiRep
 import com.example.ai_belt_mobile.utils.AudioRecorderManager
 import com.iflytek.sparkchain.core.asr.ASR
 import com.iflytek.sparkchain.core.asr.AsrCallbacks
@@ -21,6 +23,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.ai_belt_mobile.data.remote.AiResponse
+import kotlin.text.toHexString
 
 sealed interface HomeBleState {
     data object Disconnected : HomeBleState
@@ -66,23 +70,26 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         BleManager(getApplication<Application>().applicationContext, bleListener)
     }
 
-    private val targetMac = "68:25:DD:C3:07:22"
+    private val targetMac = "80:B5:4E:C5:3E:0D"
+
+    private val _bleEmergencyEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    val bleEmergencyEvents = _bleEmergencyEvents.asSharedFlow()
     // endregion
     
     // region 导航模块 - 状态与字段
     private val _navigationState = MutableStateFlow<HomeNavigationState>(HomeNavigationState.Idle)
     val navigationState: StateFlow<HomeNavigationState> = _navigationState
-    
+
     private val locationManager: LocationManager by lazy {
-        LocationManager(getApplication<Application>().applicationContext)
+        LocationManager(getApplication())
     }
     
     private val navigationManager: NavigationManager by lazy {
-        NavigationManager(getApplication<Application>().applicationContext)
+        NavigationManager.getInstance(getApplication<Application>().applicationContext)
     }
     
-    private val ttsManager: BaiduTTSManager by lazy {
-        BaiduTTSManager.getInstance()
+    private val ttsManager: SparkChainTTSManager by lazy {
+        SparkChainTTSManager.getInstance()
     }
     // endregion
 
@@ -107,16 +114,19 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                     
                     if (status == 2) {
                         isRunning = false
-                        //等ai那边对接
-                        /*viewModelScope.launch(Dispatchers.IO) {
+                        viewModelScope.launch(Dispatchers.IO) {
                             try {
-                                val response = SpeakToAiRep().sendRecognition(result)
-                                Log.d("HomeViewModel", "AI 响应: ${response.want}, ${response.toDo}, ${response.what}")
+                                Log.d("HomeViewModel", "向ai请求: $result")
+                                val response = SpeakToAiRep().sendRecognition(
+                                    RecognitionRequest(result)
+                                )
+                                Log.d("HomeViewModel", "AI 响应: ${response.code}, ${response.message},${response.mean?.want},${response.mean?.where},${response.mean?.what}")
+
 
                             } catch (e: Exception) {
                                 Log.e("HomeViewModel", "向ai请求失败", e)
                             }
-                        }*/
+                        }
 
 
 
@@ -237,6 +247,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
         override fun onConnected() {
             _bleState.value = HomeBleState.Connected(currentDeviceName, null)
+            // 这里先不请求，等待CCCD订阅成功
+        }
+
+        override fun onNotifyReady() {
             requestBattery()
         }
 
@@ -245,10 +259,34 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         override fun onMessage(bytes: ByteArray) {
-            val battery = parseBattery(bytes) ?: return
+            val text = bytes.toString(Charsets.UTF_8).trim()
+
+            Log.d(
+                "BLE_RX",
+                "len=${bytes.size}, utf8='${text.replace("\n", "\\n").replace("\r", "\\r")}', hex=${bytes.toHexString()}"
+            )
+
+            // EMERGENCY：兼容带换行/前后缀
+            if (text.contains("EMERGENCY", ignoreCase = true)) {
+                Log.d("BLE_RX", "matched EMERGENCY -> emit emergency event")
+                _bleEmergencyEvents.tryEmit(Unit)
+                return
+            }
+
+            // 电量：优先二进制，再兜底文本
+            val battery = parseBatteryPayload(bytes, text)
+            if (battery == null) {
+                Log.d("BLE_RX", "battery parse failed")
+                return
+            }
+
+            Log.d("BLE_RX", "battery parsed=$battery")
             val oldState = _bleState.value
             if (oldState is HomeBleState.Connected) {
-                _bleState.value = oldState.copy(battery = battery)
+                _bleState.value = oldState.copy(battery = battery.coerceIn(0, 100))
+                Log.d("BLE_RX", "ui battery updated=$battery")
+            } else {
+                Log.d("BLE_RX", "ignore battery update: not connected state=$oldState")
             }
         }
 
@@ -276,8 +314,25 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         bleManager.write("BAT?\n".toByteArray())
     }
 
-    private fun parseBattery(bytes: ByteArray): Int? {
-        val text = bytes.toString(Charsets.UTF_8).trim()
+//    private fun parseBattery(bytes: ByteArray): Int? {
+//        val text = bytes.toString(Charsets.UTF_8).trim()
+//        Regex("(?i)(?:BAT|BATT|BATTERY)\\s*[:=]\\s*(\\d{1,3})")
+//            .find(text)
+//            ?.groupValues
+//            ?.getOrNull(1)
+//            ?.toIntOrNull()
+//            ?.let { return it.coerceIn(0, 100) }
+//
+//        text.toIntOrNull()?.let { return it.coerceIn(0, 100) }
+//        if (bytes.size == 1) {
+//            val value = bytes[0].toInt() and 0xFF
+//            if (value in 0..100) return value
+//        }
+//        return null
+//    }
+
+    private fun parseBatteryText(text: String): Int? {
+        // 支持 BAT:78 / BATTERY=78 / 78
         Regex("(?i)(?:BAT|BATT|BATTERY)\\s*[:=]\\s*(\\d{1,3})")
             .find(text)
             ?.groupValues
@@ -286,11 +341,47 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             ?.let { return it.coerceIn(0, 100) }
 
         text.toIntOrNull()?.let { return it.coerceIn(0, 100) }
-        if (bytes.size == 1) {
-            val value = bytes[0].toInt() and 0xFF
-            if (value in 0..100) return value
+
+        // 兜底：提取字符串里的首个数字（例如 "78%"）
+        Regex("(\\d{1,3})").find(text)?.groupValues?.getOrNull(1)?.toIntOrNull()?.let {
+            return it.coerceIn(0, 100)
         }
+
         return null
+    }
+
+    private fun parseBatteryPayload(bytes: ByteArray, text: String): Int? {
+        // A. 1字节整型（最常见）
+        if (bytes.size == 1) {
+            val v = bytes[0].toInt() and 0xFF
+            if (v in 0..100) {
+                Log.d("BLE_RX", "battery parsed by uint8: $v")
+                return v
+            }
+        }
+
+        // B. 4字节整型（先小端，再大端）
+        if (bytes.size >= 4) {
+            val b0 = bytes[0].toInt() and 0xFF
+            val b1 = bytes[1].toInt() and 0xFF
+            val b2 = bytes[2].toInt() and 0xFF
+            val b3 = bytes[3].toInt() and 0xFF
+
+            val littleEndian = b0 or (b1 shl 8) or (b2 shl 16) or (b3 shl 24)
+            if (littleEndian in 0..100) {
+                Log.d("BLE_RX", "battery parsed by int32 LE: $littleEndian")
+                return littleEndian
+            }
+
+            val bigEndian = b3 or (b2 shl 8) or (b1 shl 16) or (b0 shl 24)
+            if (bigEndian in 0..100) {
+                Log.d("BLE_RX", "battery parsed by int32 BE: $bigEndian")
+                return bigEndian
+            }
+        }
+
+        // C. 文本兜底
+        return parseBatteryText(text)
     }
 
     @SuppressLint("MissingPermission")
@@ -313,25 +404,25 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     // region 导航模块 - API
     fun initNavigation() {
         ttsManager.init(getApplication<Application>().applicationContext)
-        navigationManager.init()
+
     }
-    
+
     fun startNavigation(destination: String, hasLocationPermission: Boolean, onNavigationStarted: () -> Unit, onError: (String) -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.Main) {
             try {
                 _navigationState.value = HomeNavigationState.RequestingPermission
-                
+
                 if (hasLocationPermission) {
                     _navigationState.value = HomeNavigationState.GettingLocation
-                    
+                    navigationManager.init()
                     // 获取当前位置
-                    locationManager.getCurrentLocation { location ->
+                    locationManager.getAccurateLocation { location ->
                         if (location != null) {
                             viewModelScope.launch(Dispatchers.Main) {
                                 _navigationState.value = HomeNavigationState.Navigating
                                 Log.d("HomeViewModel", "当前位置: ${location.latitude}, ${location.longitude}")
                                 // 开始导航
-                                navigationManager.startNavigation(
+                                navigationManager.startWalkingNavigation(
                                     startLocation = location,
                                     destination = destination,
                                     onNavigationStarted = onNavigationStarted,
@@ -363,10 +454,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     
     fun stopNavigation() {
         _navigationState.value = HomeNavigationState.Idle
+        navigationManager.stopNavigation()
     }
     
     fun releaseNavigation() {
-        locationManager.stopLocationUpdates()
+        locationManager.stop()
         navigationManager.release()
         ttsManager.release()
     }
@@ -381,7 +473,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
         super.onCleared()
     }
-    
 
+    private fun ByteArray.toHexString(): String =
+        joinToString(separator = " ") { each -> "%02X".format(each) }
 
 }

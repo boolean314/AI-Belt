@@ -18,9 +18,17 @@ import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.network.WsEvent
 import com.google.android.material.card.MaterialCardView
 import kotlinx.coroutines.launch
+import com.amap.api.maps.AMap
+import com.amap.api.maps.MapView
+import com.amap.api.maps.model.MarkerOptions
+import com.amap.api.maps.model.LatLng
+import com.amap.api.services.core.LatLonPoint
+import com.amap.api.services.geocoder.GeocodeSearch
+import com.amap.api.services.geocoder.RegeocodeQuery
+import com.amap.api.services.geocoder.RegeocodeResult
+import com.amap.api.services.geocoder.GeocodeSearch.OnGeocodeSearchListener
+import com.amap.api.services.geocoder.GeocodeResult
 import org.json.JSONObject
-import kotlin.text.get
-import kotlin.toString
 
 class FamilyFragment : Fragment(R.layout.fragment_family) {
 
@@ -30,6 +38,11 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
     private lateinit var locationText: TextView
     private var boundDisabilityId: String? = null
     private lateinit var emergencyCard: MaterialCardView
+    
+    // 高德地图相关
+    private lateinit var mapView: MapView
+    private lateinit var aMap: AMap
+    private var geocodeSearch: GeocodeSearch? = null
 
     // 记录最近一次定位消息的发送者，便于后续请求优先发给最近在线设备
     private var lastSenderDisabilityId: String? = null
@@ -42,18 +55,67 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
         warningText = view.findViewById(R.id.warning_text)
         locationText = view.findViewById(R.id.location_text)
         emergencyCard = view.findViewById(R.id.warning_card)
+        mapView = view.findViewById(R.id.mapView)
+        
+        // 初始化地图
+        mapView.onCreate(savedInstanceState)
+        aMap = mapView.map
+        aMap.mapType = AMap.MAP_TYPE_NORMAL
+        
+        // 初始化地理编码器
+        initGeoCoder()
+
         updateEmergencyStyle(isEmergency = false)
 
         warningText.text = "暂无紧急情况"
         locationText.text = "暂未收到定位"
-        topAddressText.text = "点击此区域向残疾人端请求最新地址"
+        topAddressText.text = "点击向残疾人端请求最新地址"
 
-        topCard.setOnClickListener {
+        topAddressText.setOnClickListener {
             requestLocationFromDisability()
         }
 
         observeWsEvents()
         loadBoundDisability()
+    }
+    
+    private fun initGeoCoder() {
+        geocodeSearch = GeocodeSearch(requireContext())
+        geocodeSearch?.setOnGeocodeSearchListener(object : OnGeocodeSearchListener {
+            override fun onGeocodeSearched(result: GeocodeResult?, errorCode: Int) {
+                // 正向地理编码回调，不需要处理
+            }
+
+            override fun onRegeocodeSearched(result: RegeocodeResult?, errorCode: Int) {
+                if (result == null || errorCode != 1000) {
+                    topAddressText.text = "地址解析失败"
+                    return
+                }
+                
+                // 解析成功，显示详细地址
+                topAddressText.text = result.regeocodeAddress.formatAddress + "\n(" + result.regeocodeAddress.building + ")"
+            }
+        })
+    }
+    
+    private fun updateMapLocation(lat: Double, lng: Double) {
+        val latLng = LatLng(lat, lng)
+        val latLonPoint = LatLonPoint(lat, lng)
+        
+        // 清除旧的标记
+        aMap.clear()
+        
+        // 添加新的标记点
+        val markerOptions = MarkerOptions()
+            .position(latLng)
+        aMap.addMarker(markerOptions)
+        
+        // 移动地图视角到该点，并缩放
+        aMap.moveCamera(com.amap.api.maps.CameraUpdateFactory.newLatLngZoom(latLng, 18f))
+        
+        // 发起逆地理编码请求获取中文地址
+        val query = RegeocodeQuery(latLonPoint, 200f, GeocodeSearch.AMAP)
+        geocodeSearch?.getFromLocationAsyn(query)
     }
 
     private fun requestLocationFromDisability() {
@@ -128,23 +190,25 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
                     }
 
                     val data = root.optJSONObject("data")
-                    val lng = data?.optString("longitude").orEmpty()
-                    val lat = data?.optString("latitude").orEmpty()
+                    val lngStr = data?.optString("longitude").orEmpty()
+                    val latStr = data?.optString("latitude").orEmpty()
                     val time = data?.optString("time").orEmpty()
                     val address = data?.optString("address").orEmpty() // 可能为空
 
                     warningText.text = "已收到最新定位"
                     locationText.text = buildString {
-                        append("经度: ").append(lng).append("\n")
-                        append("纬度: ").append(lat).append("\n")
+                        append("经度: ").append(lngStr).append("\n")
+                        append("纬度: ").append(latStr).append("\n")
                         append("时间: ").append(time)
                     }
 
-                    topAddressText.text = if (address.isNotBlank()) {
-                        address
+                    val lat = latStr.toDoubleOrNull()
+                    val lng = lngStr.toDoubleOrNull()
+
+                    if (lat != null && lng != null) {
+                        updateMapLocation(lat, lng)
                     } else {
-                        // TODO(partner): 接入地图SDK后，这里可做经纬度逆地理解析成中文地址
-                        "地址待解析（经纬度: $lat, $lng）"
+                        topAddressText.text = "定位数据无效"
                     }
                 }
 
@@ -157,26 +221,35 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
                     }
 
                     val data = root.optJSONObject("data")
-                    val lng = data?.optString("longitude").orEmpty()
-                    val lat = data?.optString("latitude").orEmpty()
+                    val lngStr = data?.optString("longitude").orEmpty()
+                    val latStr = data?.optString("latitude").orEmpty()
                     val time = data?.optString("time").orEmpty()
 
                     warningText.text = "紧急情况！"
                     locationText.text = buildString {
-                        append("SOS经度: ").append(lng).append("\n")
-                        append("SOS纬度: ").append(lat).append("\n")
+                        append("SOS经度: ").append(lngStr).append("\n")
+                        append("SOS纬度: ").append(latStr).append("\n")
                         append("时间: ").append(time)
                     }
-                    topAddressText.text = "紧急定位已更新（待地图SDK解析地址）"
+                    
+                    val lat = latStr.toDoubleOrNull()
+                    val lng = lngStr.toDoubleOrNull()
+
+                    if (lat != null && lng != null) {
+                        updateMapLocation(lat, lng)
+                    } else {
+                        topAddressText.text = "紧急定位数据无效"
+                    }
                 }
 
                 "pong" -> {
                     // 心跳响应，忽略即可
                 }
             }
-        } catch (_: Exception) {
-            // JSON格式异常可按需打日志
-        }
+            } catch (e: Exception) {
+                // JSON格式异常可按需打日志
+                e.printStackTrace()
+            }
     }
 
     private fun toast(msg: String) {
@@ -209,6 +282,21 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
                 topAddressText.text = "获取绑定残疾人失败，请重试"
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mapView.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        mapView.onPause()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        mapView.onDestroy()
     }
 
     private fun updateEmergencyStyle(isEmergency: Boolean) {
