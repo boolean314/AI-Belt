@@ -9,7 +9,9 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.amap.api.navi.AMapNaviView
+import com.amap.api.navi.AMapNaviViewListener
 import com.amap.api.navi.AMapNaviViewOptions
+import com.amap.api.navi.AmapPageType
 import com.amap.api.navi.enums.NaviType
 import com.example.ai_belt_mobile.voice.SparkChainTTSManager
 
@@ -38,7 +40,6 @@ class WalkNaviActivity : AppCompatActivity(), NavigationManager.BeltNavigationCa
             finish()
             return
         }
-
         // 创建高德导航视图并设置为ContentView
         mAMapNaviView = AMapNaviView(this)
         mAMapNaviView.onCreate(savedInstanceState)
@@ -49,9 +50,99 @@ class WalkNaviActivity : AppCompatActivity(), NavigationManager.BeltNavigationCa
             isAutoDrawRoute = true
 
         }
+        mAMapNaviView.setAMapNaviViewListener(object : AMapNaviViewListener {
+            override fun onNaviSetting() {
+                TODO("Not yet implemented")
+            }
 
+            override fun onNaviCancel() {
+                finish()
 
-        // 初始化导航管理器
+            }
+
+            override fun onNaviBackClick(): Boolean {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNaviMapMode(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNaviTurnClick() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNextRoadClick() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onScanViewButtonClick() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onLockMap(p0: Boolean) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNaviViewLoaded() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onMapTypeChanged(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNaviViewShowMode(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onStopSpeaking() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onViewTypeChanged(p0: AmapPageType?) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onAMapNaviViewExit() {
+                TODO("Not yet implemented")
+            }
+
+            override fun onStrategyChanged(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onBroadcastModeChanged(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onDayAndNightModeChanged(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onScaleAutoChanged(p0: Boolean) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onListenToVoiceDuringCallChanged(p0: Boolean) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onControlMusicVolumeModeChanged(p0: Int) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onEagleChanged(p0: Boolean) {
+                TODO("Not yet implemented")
+            }
+
+            override fun onNaviRouteHighlightChange(p0: Long, p1: Int) {
+                TODO("Not yet implemented")
+            }
+
+        })
+
+        // 初始化导航管理器,一次启动后退出会把
         navigationManager = NavigationManager.getInstance(this)
         navigationManager.init()
         navigationManager.beltCallback = this
@@ -65,13 +156,12 @@ class WalkNaviActivity : AppCompatActivity(), NavigationManager.BeltNavigationCa
 
 
     // --- BeltNavigationCallback 实现 ---
-
     override fun onBeltNavigationUpdate(relativeAngle: Float, distance: Int) {
         Log.i("WalkNaviActivity", "=== 收到腰带导航数据 ===")
         Log.i("WalkNaviActivity", "相对偏角: $relativeAngle, 距离: $distance 米")
 
         // TODO: 在这里将 relativeAngle 和 distance 发送给智能腰带 (通过蓝牙)
-        // 例如: viewModel.sendBluetoothData("{\"angle\": \$relativeAngle, \"distance\": \$distance}")
+
     }
 
     override fun onNaviTextUpdate(text: String) {

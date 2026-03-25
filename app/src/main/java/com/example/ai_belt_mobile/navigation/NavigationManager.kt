@@ -13,6 +13,7 @@ import android.util.Log
 import com.amap.api.navi.AMapNavi
 import com.amap.api.navi.AMapNaviListener
 import com.amap.api.navi.enums.NaviType
+import com.amap.api.navi.enums.TransportType
 import com.amap.api.navi.model.AMapCalcRouteResult
 import com.amap.api.navi.model.AMapLaneInfo
 import com.amap.api.navi.model.AMapModelCross
@@ -22,15 +23,19 @@ import com.amap.api.navi.model.AMapNaviLocation
 import com.amap.api.navi.model.AMapNaviRouteNotifyData
 import com.amap.api.navi.model.AMapNaviTrafficFacilityInfo
 import com.amap.api.navi.model.AMapServiceAreaInfo
+import com.amap.api.navi.model.AMapTravelInfo
 import com.amap.api.navi.model.AimLessModeCongestionInfo
 import com.amap.api.navi.model.AimLessModeStat
 import com.amap.api.navi.model.NaviInfo
 import com.amap.api.navi.model.NaviLatLng
 import com.amap.api.services.core.LatLonPoint
+import com.amap.api.services.core.PoiItem
 import com.amap.api.services.geocoder.GeocodeQuery
 import com.amap.api.services.geocoder.GeocodeResult
 import com.amap.api.services.geocoder.GeocodeSearch
 import com.amap.api.services.geocoder.RegeocodeResult
+import com.amap.api.services.poisearch.PoiResult
+import com.amap.api.services.poisearch.PoiSearch
 
 
 import com.autonavi.base.amap.mapcore.tools.GLConvertUtil
@@ -49,6 +54,7 @@ class NavigationManager private constructor(private val context: Context) : AMap
     private var isNavigating = false
     private var mAMapNavi: AMapNavi? = null
     private var geocodeSearch: GeocodeSearch? = null
+    private var poiSearch: PoiSearch? = null
 
     // 传感器相关
     private var sensorManager: SensorManager? = null
@@ -126,29 +132,36 @@ class NavigationManager private constructor(private val context: Context) : AMap
 
         Thread {
             try {
-                ttsManager.speak("正在解析目的地")
+                ttsManager.speak("正在搜索目的地")
                 if (isNavigating) {
                     Handler(Looper.getMainLooper()).post { onError("导航已在进行中") }
                     return@Thread
                 }
 
-                geocodeSearch?.setOnGeocodeSearchListener(object :
-                    GeocodeSearch.OnGeocodeSearchListener {
-                    override fun onRegeocodeSearched(p0: RegeocodeResult?, p1: Int) {}
+                // 构造POI搜索对象
+                val query = PoiSearch.Query(destination, "", "")
+                query.pageSize = 10 // 设置每页最多返回多少条poiitem
+                query.pageNum = 0 // 设置查询页码
 
-                    override fun onGeocodeSearched(result: GeocodeResult?, errorCode: Int) {
-                        if (errorCode == 1000 && result != null && result.geocodeAddressList.isNotEmpty()) {
-                            val geocodeAddress = result.geocodeAddressList[0]
-                            destLatLon = geocodeAddress.latLonPoint
+                poiSearch = PoiSearch(context, query)
+                poiSearch?.setOnPoiSearchListener(object : PoiSearch.OnPoiSearchListener {
+                    override fun onPoiSearched(result: PoiResult?, errorCode: Int) {
+                        if (errorCode == 1000 && result != null && result.pois.isNotEmpty()) {
+                            // 获取第一个POI结果
+                            val poiItem = result.pois[0]
+                            destLatLon = poiItem.latLonPoint
 
                             Log.i(
                                 "NavigationManager",
-                                "解析成功，目标坐标: ${destLatLon?.latitude}, ${destLatLon?.longitude}"
+                                "POI搜索成功，目标坐标: ${destLatLon?.latitude}, ${destLatLon?.longitude}"
                             )
+                            Log.i("NavigationManager", "POI名称: ${poiItem.title}")
+                            Log.i("NavigationManager", "POI地址: ${poiItem.snippet}")
 
                             val startPoint = NaviLatLng(startLocation.latitude, startLocation.longitude)
                             val endPoint = NaviLatLng(destLatLon!!.latitude, destLatLon!!.longitude)
-
+                            //渲染路线
+                            mAMapNavi!!.travelInfo = AMapTravelInfo(TransportType.Walk)
                             val isSuccess = mAMapNavi?.calculateWalkRoute(startPoint, endPoint) ?: false
                             if (!isSuccess) {
                                 Handler(Looper.getMainLooper()).post { onError("发起算路失败") }
@@ -159,20 +172,75 @@ class NavigationManager private constructor(private val context: Context) : AMap
                                 Handler(Looper.getMainLooper()).post { onNavigationStarted() }
                             }
                         } else {
-                            Handler(Looper.getMainLooper()).post { onError("地址解析失败，错误码：$errorCode") }
-                            isNavigating = false
+                            // 如果POI搜索失败，尝试使用地理编码
+                            fallbackToGeocode(startLocation, destination, onNavigationStarted, onError)
                         }
                     }
+
+                    override fun onPoiItemSearched(
+                        p0: PoiItem?,
+                        p1: Int
+                    ) {
+                        TODO("Not yet implemented")
+                    }
+
+
                 })
 
-                val query = GeocodeQuery(destination, "")
-                geocodeSearch?.getFromLocationNameAsyn(query)
+                // 发送POI搜索请求
+                poiSearch?.searchPOIAsyn()
 
             } catch (e: Exception) {
                 Handler(Looper.getMainLooper()).post { onError("导航启动失败: ${e.message}") }
                 isNavigating = false
             }
         }.start()
+    }
+
+    // POI搜索失败时回退到地理编码
+    private fun fallbackToGeocode(
+        startLocation: Location,
+        destination: String,
+        onNavigationStarted: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        Log.i("NavigationManager", "POI搜索失败，尝试使用地理编码")
+        ttsManager.speak("POI搜索失败，尝试使用地理编码")
+
+        geocodeSearch?.setOnGeocodeSearchListener(object :
+            GeocodeSearch.OnGeocodeSearchListener {
+            override fun onRegeocodeSearched(p0: RegeocodeResult?, p1: Int) {}
+
+            override fun onGeocodeSearched(result: GeocodeResult?, errorCode: Int) {
+                if (errorCode == 1000 && result != null && result.geocodeAddressList.isNotEmpty()) {
+                    val geocodeAddress = result.geocodeAddressList[0]
+                    destLatLon = geocodeAddress.latLonPoint
+
+                    Log.i(
+                        "NavigationManager",
+                        "地理编码成功，目标坐标: ${destLatLon?.latitude}, ${destLatLon?.longitude}"
+                    )
+
+                    val startPoint = NaviLatLng(startLocation.latitude, startLocation.longitude)
+                    val endPoint = NaviLatLng(destLatLon!!.latitude, destLatLon!!.longitude)
+                    val isSuccess = mAMapNavi?.calculateWalkRoute(startPoint, endPoint) ?: false
+                    if (!isSuccess) {
+                        Handler(Looper.getMainLooper()).post { onError("发起算路失败") }
+                        isNavigating = false
+                    } else {
+                        Log.i("NavigationManager", "发起步行算路请求成功")
+                        isNavigating = true
+                        Handler(Looper.getMainLooper()).post { onNavigationStarted() }
+                    }
+                } else {
+                    Handler(Looper.getMainLooper()).post { onError("地址解析失败，错误码：$errorCode") }
+                    isNavigating = false
+                }
+            }
+        })
+
+        val query = GeocodeQuery(destination, "")
+        geocodeSearch?.getFromLocationNameAsyn(query)
     }
 
     fun stopNavigation() {
@@ -191,8 +259,9 @@ class NavigationManager private constructor(private val context: Context) : AMap
     fun release() {
         stopNavigation()
         mAMapNavi?.removeAMapNaviListener(this)
-        // 移除 destroy 调用，AMapNavi的单例生命周期可以跟随应用
         mAMapNavi = null
+        geocodeSearch = null
+        poiSearch = null
         sensorManager = null
     }
 
