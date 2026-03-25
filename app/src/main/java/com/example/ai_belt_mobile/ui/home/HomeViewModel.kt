@@ -118,6 +118,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                                 )
                                 Log.d("HomeViewModel", "AI 响应: ${response.code}, ${response.message},${response.mean?.want},${response.mean?.where},${response.mean?.what}")
 
+
                             } catch (e: Exception) {
                                 Log.e("HomeViewModel", "向ai请求失败", e)
                             }
