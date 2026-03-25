@@ -59,7 +59,11 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     private var sosTriggered = false
     private val SOS_HOLD_DURATION_MS = 1000L
     private var lastEmergencyDialogTs = 0L
-
+    // region 定位模块 - 字段
+    private val locationManager by lazy {
+        com.example.ai_belt_mobile.navigation.LocationManager(requireContext())
+    }
+    // endregion
     private val blePermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
             if (result.values.all { it }) {
@@ -299,6 +303,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
         viewModel.stopScan()
         // 释放导航相关资源
         viewModel.releaseNavigation()
+        // 释放定位相关资源
+        locationManager.stop()
         super.onDestroyView()
         scope.cancel()
     }
@@ -356,51 +362,96 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
             return
         }
 
-        val locationManager =
-            com.example.ai_belt_mobile.navigation.LocationManager(requireContext())
-        locationManager.getAccurateLocation { location ->
-            // 定位失败也继续发送：经纬度置空
-            val longitude = location?.longitude?.toString().orEmpty()
-            val latitude = location?.latitude?.toString().orEmpty()
+        // 检查定位权限
+        XXPermissions.with(requireActivity())
+            .permission(PermissionLists.getAccessFineLocationPermission())
+            .request(object : OnPermissionCallback {
+                override fun onResult(
+                    grantedList: MutableList<IPermission>,
+                    deniedList: MutableList<IPermission>
+                ) {
+                    if (deniedList.isEmpty()) {
+                        // 有权限，获取定位
+                        locationManager.getAccurateLocation { location ->
+                            // 定位失败也继续发送：经纬度置空
+                            val longitude = location?.longitude?.toString().orEmpty()
+                            val latitude = location?.latitude?.toString().orEmpty()
 
-            if (location == null) {
-                showToast("定位失败，已发送空定位并继续拨号")
-            }
+                            if (location == null) {
+                                showToast("定位失败，已发送空定位并继续拨号")
+                            }
 
-            val sent = WebSocketManager.sendSOS(
-                fromId = session.id.toString(),
-                toId = null, // 后端按紧急联系人转发
-                longitude = longitude,
-                latitude = latitude,
-                time = System.currentTimeMillis().toString()
-            )
+                            val sent = WebSocketManager.sendSOS(
+                                fromId = session.id.toString(),
+                                toId = null, // 后端按紧急联系人转发
+                                longitude = longitude,
+                                latitude = latitude,
+                                time = System.currentTimeMillis().toString()
+                            )
 
-            if (!sent) {
-                showToast("SOS发送失败：WebSocket未连接")
-                return@getAccurateLocation
-            }
+                            if (!sent) {
+                                showToast("SOS发送失败：WebSocket未连接")
+                                return@getAccurateLocation
+                            }
 
-            // 无论定位是否成功，只要SOS发送成功就继续找紧急联系人拨号
-            viewLifecycleOwner.lifecycleScope.launch {
-                try {
-                    val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
-                    if (resp.code != 200) {
-                        showToast("获取家属列表失败：${resp.message}")
-                        return@launch
+                            // 无论定位是否成功，只要SOS发送成功就继续找紧急联系人拨号
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                try {
+                                    val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
+                                    if (resp.code != 200) {
+                                        showToast("获取家属列表失败：${resp.message}")
+                                        return@launch
+                                    }
+
+                                    val emergencyPhone = resp.data.firstOrNull { it.isEmergency }?.phone.orEmpty()
+                                    if (emergencyPhone.isBlank()) {
+                                        showToast("未设置紧急联系人，无法拨号")
+                                        return@launch
+                                    }
+
+                                    callEmergencyPhone(emergencyPhone)
+                                } catch (_: Exception) {
+                                    showToast("获取紧急联系人失败，请稍后重试")
+                                }
+                            }
+                        }
+                    } else {
+                        // 无权限，发送空定位
+                        showToast("无定位权限，已发送空定位")
+                        val sent = WebSocketManager.sendSOS(
+                            fromId = session.id.toString(),
+                            toId = null,
+                            longitude = "",
+                            latitude = "",
+                            time = System.currentTimeMillis().toString()
+                        )
+                        if (sent) {
+                            // 继续找紧急联系人拨号
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                try {
+                                    val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
+                                    if (resp.code != 200) {
+                                        showToast("获取家属列表失败：${resp.message}")
+                                        return@launch
+                                    }
+
+                                    val emergencyPhone = resp.data.firstOrNull { it.isEmergency }?.phone.orEmpty()
+                                    if (emergencyPhone.isBlank()) {
+                                        showToast("未设置紧急联系人，无法拨号")
+                                        return@launch
+                                    }
+
+                                    callEmergencyPhone(emergencyPhone)
+                                } catch (_: Exception) {
+                                    showToast("获取紧急联系人失败，请稍后重试")
+                                }
+                            }
+                        } else {
+                            showToast("SOS发送失败：WebSocket未连接")
+                        }
                     }
-
-                    val emergencyPhone = resp.data.firstOrNull { it.isEmergency }?.phone.orEmpty()
-                    if (emergencyPhone.isBlank()) {
-                        showToast("未设置紧急联系人，无法拨号")
-                        return@launch
-                    }
-
-                    callEmergencyPhone(emergencyPhone)
-                } catch (_: Exception) {
-                    showToast("获取紧急联系人失败，请稍后重试")
                 }
-            }
-        }
+            })
     }
     private fun endSosHold(cancelIfNotTriggered: Boolean) {
         if (cancelIfNotTriggered && !sosTriggered) {
