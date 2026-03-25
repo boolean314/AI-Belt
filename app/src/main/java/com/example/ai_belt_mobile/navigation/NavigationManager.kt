@@ -158,11 +158,13 @@ class NavigationManager private constructor(private val context: Context) : AMap
                             Log.i("NavigationManager", "POI名称: ${poiItem.title}")
                             Log.i("NavigationManager", "POI地址: ${poiItem.snippet}")
 
-                            val startPoint = NaviLatLng(startLocation.latitude, startLocation.longitude)
+                            val startPoint =
+                                NaviLatLng(startLocation.latitude, startLocation.longitude)
                             val endPoint = NaviLatLng(destLatLon!!.latitude, destLatLon!!.longitude)
                             //渲染路线
                             mAMapNavi!!.travelInfo = AMapTravelInfo(TransportType.Walk)
-                            val isSuccess = mAMapNavi?.calculateWalkRoute(startPoint, endPoint) ?: false
+                            val isSuccess =
+                                mAMapNavi?.calculateWalkRoute(startPoint, endPoint) ?: false
                             if (!isSuccess) {
                                 Handler(Looper.getMainLooper()).post { onError("发起算路失败") }
                                 isNavigating = false
@@ -173,7 +175,12 @@ class NavigationManager private constructor(private val context: Context) : AMap
                             }
                         } else {
                             // 如果POI搜索失败，尝试使用地理编码
-                            fallbackToGeocode(startLocation, destination, onNavigationStarted, onError)
+                            fallbackToGeocode(
+                                startLocation,
+                                destination,
+                                onNavigationStarted,
+                                onError
+                            )
                         }
                     }
 
@@ -317,22 +324,19 @@ class NavigationManager private constructor(private val context: Context) : AMap
 
     // --- 核心算法：计算Bearing与Relative Angle ---
     private var lastDistance = 0
-    private fun calculateAndSendBeltData(distance: Int) {
+    private fun calculateAndSendBeltData(distance: Int, nextLat: Double, nextLon: Double) {
         if (!isNavigating || curLocation == null || destLatLon == null) return
         if (distance > 0) lastDistance = distance
-
-        // 目标方位角 Bearing (简单使用终点计算，如果是沿着路线，可以用naviInfo的下一个节点)
+        // 目标方位角 Bearing (如果是沿着路线，可以用naviInfo的下一个节点)
         // 这里使用两点经纬度计算绝对角度
         val bearing = calculateBearing(
             curLocation!!.coord.latitude, curLocation!!.coord.longitude,
-            destLatLon!!.latitude, destLatLon!!.longitude
+            nextLat, nextLon
         )
-
         // 相对角度 Relative Angle
         var relativeAngle = bearing - currentHeading
         if (relativeAngle < -180) relativeAngle += 360
         if (relativeAngle > 180) relativeAngle -= 360
-
         // 回调给腰带 (例如: relativeAngle > 0 偏右，< 0 偏左)
         beltCallback?.onBeltNavigationUpdate(relativeAngle.toFloat(), lastDistance)
     }
@@ -362,12 +366,31 @@ class NavigationManager private constructor(private val context: Context) : AMap
         }
     }
 
-    //路线信息改变时的回调，此时会计算偏角和距离
+    //手机朝向或者位置发送变化时会触发
     override fun onNaviInfoUpdate(naviInfo: NaviInfo?) {
-        naviInfo?.let {
-            // 获取距离下一路段的距离，或者距离终点的总距离
-            val retainDistance = it.curStepRetainDistance
-            calculateAndSendBeltData(retainDistance)
+        naviInfo?.let { info ->
+            val path = mAMapNavi?.naviPath
+            if (path != null) {
+                // 获取所有路段 (Steps)
+                val steps = path.steps
+                val curStepIndex = info.curStep
+                // 确保索引有效且有下一段路
+                if (curStepIndex < steps.size) {
+                    val currentStep = steps[curStepIndex]
+                    // 每一个 Step 由多个坐标点组成，最后一个点通常是转弯处（即下一路段起始点）
+                    val coords = currentStep.coords
+                    if (coords.isNotEmpty()) {
+                        val nextNode = coords.last() // 取当前路段的终点坐标
+                        val distanceToNextNode = info.curStepRetainDistance
+                        // 调用计算逻辑
+                        calculateAndSendBeltData(
+                            distanceToNextNode,
+                            nextNode.latitude,
+                            nextNode.longitude
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -396,9 +419,10 @@ class NavigationManager private constructor(private val context: Context) : AMap
         ttsManager.speak("路线规划失败")
         isNavigating = false
     }
+
     override fun onCalculateRouteSuccess(p0: AMapCalcRouteResult?) {
         Log.i("NavigationManager", "算路成功")
-        
+
         // 获取路线数据对象
         val naviPaths = mAMapNavi?.naviPaths
 
@@ -410,6 +434,7 @@ class NavigationManager private constructor(private val context: Context) : AMap
         registerSensors()
         beltCallback?.onNaviStart()
     }
+
     override fun onReCalculateRouteForYaw() {}
     override fun onReCalculateRouteForTrafficJam() {}
     override fun onArrivedWayPoint(p0: Int) {}
