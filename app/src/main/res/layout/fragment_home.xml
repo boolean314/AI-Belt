@@ -56,12 +56,15 @@
                 android:layout_height="match_parent"
                 android:layout_gravity="center"
                 android:visibility="visible"
-                app:indicatorSize="400dp"
-                app:trackThickness="20dp"
+                app:indicatorSize="350dp"
+                app:trackThickness="25dp"
                 app:indicatorDirectionCircular="clockwise"
+                app:indicatorColor="@color/red"
+                app:trackColor="@color/white"
                 android:indeterminate="false"
                 android:max="100"
-                android:progress="0" />
+                android:progress="0"
+                />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/emergency_button"
@@ -72,7 +75,7 @@
                 android:textStyle="bold"
                 android:textSize="120sp"
                 android:textColor="@android:color/white"
-                app:backgroundTint="#D32F2F"
+                app:backgroundTint="#FF3B30"
                 app:cornerRadius="170dp" />
         </FrameLayout>
 
@@ -134,7 +137,7 @@
         android:id="@+id/voice_input_button"
         android:layout_width="450dp"
         android:layout_height="450dp"
-        android:layout_marginBottom="-300dp"
+        android:layout_marginBottom="-270dp"
         android:contentDescription="语音输入按钮"
         android:gravity="top|center_horizontal"
         android:icon="@android:drawable/ic_btn_speak_now"
@@ -142,7 +145,7 @@
         android:text="语音输入"
         android:textColor="#FFFFFF"
         android:textSize="24sp"
-        app:backgroundTint="#2196F3"
+        app:backgroundTint="@color/blue_light"
         app:cornerRadius="200dp"
         app:iconSize="100dp"
         app:iconGravity="top"

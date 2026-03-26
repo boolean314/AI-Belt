@@ -40,6 +40,8 @@ import com.example.ai_belt_mobile.navigation.WalkNaviActivity
 import com.example.ai_belt_mobile.network.UserRetrofitClient
 import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.network.WsEvent
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.last
 import org.json.JSONObject
 import kotlin.code
 import kotlin.text.get
@@ -147,6 +149,11 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
         binding.voiceInputButton.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    // 按下时振动反馈
+                    val vibrator = requireContext().getSystemService(android.os.Vibrator::class.java)
+                    if (vibrator != null && vibrator.hasVibrator()) {
+                        vibrator.vibrate(100)
+                    }
                     // 按下时请求权限并开始识别
                     requestAudioPermission()
                     showVoiceInputPopup()
@@ -548,6 +555,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                     if (now - lastEmergencyDialogTs < 2000) return@collect
                     lastEmergencyDialogTs = now
                     showEmergencyHelpDialog()
+                    //askNeedHelp()
                 }
             }
         }
@@ -568,5 +576,30 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                 showToast("已记录：暂时不需要帮助")
             }
             .show()
+    }
+    private fun askNeedHelp() {
+        // 设置紧急语音识别标志
+        viewModel.setEmergencyVoiceRecognition(true)
+        val ttsManager = com.example.ai_belt_mobile.voice.SparkChainTTSManager.getInstance()
+        val promptText = "检测到紧急情况，您是否需要帮助"
+        ttsManager.speak(promptText)
+        viewLifecycleOwner.lifecycleScope.launch {
+            kotlinx.coroutines.delay(4000) // 等待TTS播报完成
+            requestAudioPermission()
+            viewModel.startVoiceRecognition()
+            val result = kotlinx.coroutines.withTimeoutOrNull(5000) {
+                viewModel.recognitionResult.first{ it.isNotEmpty() && !it.contains("正在识别")&&it.contains("。")  }
+            }
+            viewModel.stopVoiceRecognition()
+            if (result == null) {
+                showToast("未检测到回应，已触发紧急求救")
+                triggerSosAction()
+            } else if (result.contains("要")) {
+                showToast("已确认需要帮助，已触发紧急求救")
+                triggerSosAction()
+            } else if (result.contains("不")) {
+                showToast("暂时不需要帮助")
+            }
+        }
     }
 }

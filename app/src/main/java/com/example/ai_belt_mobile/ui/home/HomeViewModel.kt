@@ -55,6 +55,12 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     
     @Volatile
     private var isRunning = false
+    private var isEmergencyVoiceRecognition = false
+
+    // 添加方法来设置标志输入的语音是否为紧急情况时触发的
+    fun setEmergencyVoiceRecognition(emergency: Boolean) {
+        isEmergencyVoiceRecognition = emergency
+    }
 
     // endregion
 
@@ -114,17 +120,31 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                     
                     if (status == 2) {
                         isRunning = false
-                        viewModelScope.launch(Dispatchers.IO) {
-                            try {
-                                Log.d("HomeViewModel", "向ai请求: $result")
-                                val response = SpeakToAiRep().sendRecognition(
-                                    RecognitionRequest(result)
-                                )
-                                Log.d("HomeViewModel", "AI 响应: ${response.code}, ${response.message},${response.mean?.want},${response.mean?.where},${response.mean?.what}")
-
-
-                            } catch (e: Exception) {
-                                Log.e("HomeViewModel", "向ai请求失败", e)
+                        isRunning = false
+                        // 只在非紧急情况下向AI发送请求
+                        if (!isEmergencyVoiceRecognition) {
+                            viewModelScope.launch(Dispatchers.IO) {
+                                try {
+                                    Log.d("HomeViewModel", "向ai请求: $result")
+                                    val response = SpeakToAiRep().sendRecognition(
+                                        RecognitionRequest(result)
+                                    )
+                                    Log.d("HomeViewModel", "AI 响应: ${response.code}, ${response.message},${response.mean?.want},${response.mean?.where},${response.mean?.what}")
+                                    if(response.code==200){
+                                        when(response.mean?.want){
+                                            "navigation"->{
+                                                //后续将点击开始导航的逻辑移动到这里
+                                            }
+                                            "recognition"->{
+                                                response.mean.what?.let {
+                                                    ttsManager.speak(it)
+                                                }
+                                            }
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("HomeViewModel", "向ai请求失败", e)
+                                }
                             }
                         }
 
@@ -450,11 +470,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
-    
-    fun stopNavigation() {
-        _navigationState.value = HomeNavigationState.Idle
-        navigationManager.stopNavigation()
-    }
+
     
     fun releaseNavigation() {
         locationManager.stop()

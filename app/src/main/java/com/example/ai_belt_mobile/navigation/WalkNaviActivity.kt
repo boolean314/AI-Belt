@@ -142,34 +142,30 @@ class WalkNaviActivity : AppCompatActivity(), NavigationManager.BeltNavigationCa
 
         })
 
-        // 初始化导航管理器,一次启动后退出会把
+        // 初始化导航管理器
         navigationManager = NavigationManager.getInstance(this)
         navigationManager.init()
         navigationManager.beltCallback = this
-
-
-
     }
-
-
-
-
 
     // --- BeltNavigationCallback 实现 ---
     override fun onBeltNavigationUpdate(relativeAngle: Float, distance: Int) {
         Log.i("WalkNaviActivity", "=== 收到腰带导航数据 ===")
         Log.i("WalkNaviActivity", "相对偏角: $relativeAngle, 距离: $distance 米")
-
-        // TODO: 在这里将 relativeAngle 和 distance 发送给智能腰带 (通过蓝牙)
-
+        if(relativeAngle>30.00||relativeAngle<-30.00){
+            // 将 relativeAngle发送给智能腰带 (通过蓝牙)
+            val homeViewModel = androidx.lifecycle.ViewModelProvider(this)[com.example.ai_belt_mobile.ui.home.HomeViewModel::class.java]
+            val angleString = "ANGLE:$relativeAngle"
+            val sent = homeViewModel.sendOnCommand(angleString)
+            Log.i("WalkNaviActivity", "发送偏角数据: $angleString, 发送结果: $sent")
+        }
     }
 
     override fun onNaviTextUpdate(text: String) {
-        // 导航管理器已经调用了TTS播报，这里可以更新UI或发送给腰带提示
+        // 导航管理器已经调用了TTS播报
     }
 
     override fun onNaviStart() {
-        Log.i("WalkNaviActivity", "导航已真正开始")
     }
 
     override fun onNaviStop() {
@@ -177,9 +173,7 @@ class WalkNaviActivity : AppCompatActivity(), NavigationManager.BeltNavigationCa
         finish()
     }
 
-
     // --- 生命周期管理 ---
-
     override fun onResume() {
         super.onResume()
         mAMapNaviView.onResume()
