@@ -59,7 +59,7 @@
                 app:indicatorSize="350dp"
                 app:trackThickness="25dp"
                 app:indicatorDirectionCircular="clockwise"
-                app:indicatorColor="@color/red"
+                app:indicatorColor="#FF3B30"
                 app:trackColor="@color/white"
                 android:indeterminate="false"
                 android:max="100"
