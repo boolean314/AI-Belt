@@ -72,6 +72,11 @@ class NavigationManager private constructor(private val context: Context) : AMap
     var beltCallback: BeltNavigationCallback? = null
 
     interface BeltNavigationCallback {
+/**
+ * 更新传送带导航状态的方法
+ * @param relativeAngle 相对角度，表示目标方向与当前方向的偏移量，单位为度
+ * @param distance 到目标的距离，单位为厘米
+ */
         fun onBeltNavigationUpdate(relativeAngle: Float, distance: Int)
         fun onNaviTextUpdate(text: String)
         fun onNaviStart()
@@ -422,13 +427,9 @@ class NavigationManager private constructor(private val context: Context) : AMap
 
     override fun onCalculateRouteSuccess(p0: AMapCalcRouteResult?) {
         Log.i("NavigationManager", "算路成功")
-
         // 获取路线数据对象
         val naviPaths = mAMapNavi?.naviPaths
-
-
         Log.i("NavigationManager", "路线数量: ${naviPaths?.size}")
-
         // 启动导航
         mAMapNavi?.startNavi(NaviType.GPS) // 步行导航使用GPS类型
         registerSensors()
@@ -447,7 +448,6 @@ class NavigationManager private constructor(private val context: Context) : AMap
         p2: Int
     ) {
     }
-
     override fun onServiceAreaUpdate(p0: Array<out AMapServiceAreaInfo>?) {}
     override fun showCross(p0: AMapNaviCross?) {}
     override fun hideCross() {}

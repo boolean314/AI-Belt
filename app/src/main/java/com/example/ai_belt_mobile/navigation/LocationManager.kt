@@ -74,7 +74,7 @@ class LocationManager(private val context: Context) {
                 // 定位成功
                 Log.i("LocationManager", "高德定位成功: 精度=${amapLocation.accuracy}m, 纬度=${amapLocation.latitude}, 经度=${amapLocation.longitude}, 地址=${amapLocation.address}")
                 
-                // 将高德输出的 GCJ-02 经纬度塞进原生 Location 里传出去 (与高德导航完美匹配)
+                // 将高德输出的 GCJ-02 经纬度塞进原生 Location 里传出去
                 val androidLocation = Location(android.location.LocationManager.GPS_PROVIDER).apply {
                     latitude = amapLocation.latitude
                     longitude = amapLocation.longitude

@@ -3,6 +3,10 @@
     <style name="Base.Theme.AI_Belt_Mobile" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your light theme here. -->
         <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="android:windowBackground">@color/white</item>
+        <item name="colorOnSurface">@color/blue_light</item>
+        <item name="colorPrimary">@color/blue_light</item>
+        <item name="bottomNavigationStyle">@color/blue_light</item>
     </style>
 
     <style name="Theme.AI_Belt_Mobile" parent="Base.Theme.AI_Belt_Mobile" />

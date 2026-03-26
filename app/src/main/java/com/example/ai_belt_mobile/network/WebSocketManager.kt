@@ -17,6 +17,7 @@ import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
+import kotlin.compareTo
 
 sealed class WsEvent {
     object Opened : WsEvent()
@@ -74,12 +75,14 @@ object WebSocketManager {
                 _isConnected.value = false
                 stopHeartbeat()
                 _events.tryEmit(WsEvent.Closed(code, reason))
+                tryReconnect()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 _isConnected.value = false
                 stopHeartbeat()
                 _events.tryEmit(WsEvent.Error(t))
+                tryReconnect()
             }
         })
     }
@@ -157,6 +160,24 @@ object WebSocketManager {
     private fun stopHeartbeat() {
         heartbeatJob?.cancel()
         heartbeatJob = null
+    }
+
+    private fun tryReconnect() {
+        // 如果当前没有用户信息就不重连
+        if (currentUserId <= 0 || (currentIdentity != 0 && currentIdentity != 1)) {
+            return
+        }
+
+        // 启动一个协程延时重连，避免立刻频繁重试
+        scope.launch {
+            // 简单写法：固定 5 秒后重连，你也可以改成指数退避
+            delay(5_000L)
+
+            // 如果在这段时间里已经被别处连上了，就不再重连
+            if (!_isConnected.value && !connection.isConnected()) {
+                connect(currentUserId, currentIdentity)
+            }
+        }
     }
 
     fun disconnect() {
