@@ -23,7 +23,7 @@ object UserRetrofitClient {
             .create()
 
         Retrofit.Builder()
-            .baseUrl("http://192.168.1.156:8080/api/v1/")    //lrt：http://47.113.224.195:32406 //dyy：http://192.168.1.109:8080/
+            .baseUrl("http://192.168.1.157:8080/api/v1/")    //lrt：http://47.113.224.195:32406 //dyy：http://192.168.1.109:8080/
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

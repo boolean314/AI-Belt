@@ -195,12 +195,16 @@ class SparkChainTTSManager private constructor() {
     }
 
     fun release() {
-        if (isInitialized) {
-            stop()
-            audioTrack?.release()
-            audioTrack = null
-            isInitialized = false
-            Log.d("SparkChainTTSManager", "释放TTS资源")
-        }
+        // 无论 isInitialized 状态如何，只要调用 release 就应该彻底重置
+        stop()
+        audioTrack?.release()
+        audioTrack = null
+        // 停止并清理 HandlerThread (如果有的话)
+        audioPlayHandler?.removeCallbacksAndMessages(null)
+        audioPlayHandler = null
+        isInitialized = false
+        //把静态实例置空，这样下次 getInstance 才会跑全新的构造函数
+        instance = null
+        Log.d("SparkChainTTSManager", "TTS单例已彻底销毁并重置实例")
     }
 }

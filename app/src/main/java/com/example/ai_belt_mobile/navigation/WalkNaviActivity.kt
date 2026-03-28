@@ -47,8 +47,6 @@ class WalkNaviActivity : AppCompatActivity(), NavigationManager.BeltNavigationCa
         mAMapNaviView.viewOptions = AMapNaviViewOptions().apply {
             isRouteListButtonShow = false
             isSettingMenuEnabled = false
-            isAutoDrawRoute = true
-
         }
         mAMapNaviView.setAMapNaviViewListener(object : AMapNaviViewListener {
             override fun onNaviSetting() {
@@ -152,13 +150,7 @@ class WalkNaviActivity : AppCompatActivity(), NavigationManager.BeltNavigationCa
     override fun onBeltNavigationUpdate(relativeAngle: Float, distance: Int) {
         Log.i("WalkNaviActivity", "=== 收到腰带导航数据 ===")
         Log.i("WalkNaviActivity", "相对偏角: $relativeAngle, 距离: $distance 米")
-        if(relativeAngle>30.00||relativeAngle<-30.00){
-            // 将 relativeAngle发送给智能腰带 (通过蓝牙)
-            val homeViewModel = androidx.lifecycle.ViewModelProvider(this)[com.example.ai_belt_mobile.ui.home.HomeViewModel::class.java]
-            val angleString = "ANGLE:$relativeAngle"
-            val sent = homeViewModel.sendOnCommand(angleString)
-            Log.i("WalkNaviActivity", "发送偏角数据: $angleString, 发送结果: $sent")
-        }
+        //好像没用了这个回调
     }
 
     override fun onNaviTextUpdate(text: String) {
@@ -188,7 +180,7 @@ class WalkNaviActivity : AppCompatActivity(), NavigationManager.BeltNavigationCa
         super.onDestroy()
         mAMapNaviView.onDestroy()
         navigationManager.beltCallback = null
-        navigationManager.release()
+        navigationManager.stopNavigation()
         Log.i("WalkNaviActivity", "导航页面已销毁，导航已停止")
     }
 }

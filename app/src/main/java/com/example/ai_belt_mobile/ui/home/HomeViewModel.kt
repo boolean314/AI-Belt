@@ -64,6 +64,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     // endregion
 
+    init{
+        // 监听来自 NavigationManager 的偏角数据，由持有真实蓝牙连接的 ViewModel 负责发送
+
+    }
+
     // region BLE模块 - 状态与字段
     private val _bleState = MutableStateFlow<HomeBleState>(HomeBleState.Disconnected)
     val bleState = _bleState.asStateFlow()
@@ -423,7 +428,15 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     // region 导航模块 - API
     fun initNavigation() {
         ttsManager.init(getApplication<Application>().applicationContext)
-
+        viewModelScope.launch {
+            navigationManager.beltAngleFlow.collect { angle ->
+                if (angle > 30.0 || angle < -30.0) {
+                    val angleString = "ANGLE:$angle"
+                    val sent = sendOnCommand(angleString)
+                    Log.i("HomeViewModel", "后台发送偏角数据: $angleString, 发送结果: $sent")
+                }
+            }
+        }
     }
     
     fun startNavigation(destination: String, hasLocationPermission: Boolean, onNavigationStarted: () -> Unit, onError: (String) -> Unit) {
@@ -474,8 +487,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     
     fun releaseNavigation() {
         locationManager.stop()
-        navigationManager.release()
-        ttsManager.release()
     }
     // endregion
 
