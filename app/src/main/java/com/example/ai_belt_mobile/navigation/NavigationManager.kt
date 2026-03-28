@@ -40,6 +40,8 @@ import com.amap.api.services.poisearch.PoiSearch
 
 import com.autonavi.base.amap.mapcore.tools.GLConvertUtil
 import com.example.ai_belt_mobile.voice.SparkChainTTSManager
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -67,6 +69,10 @@ class NavigationManager private constructor(private val context: Context) : AMap
     // 目标坐标 (用于计算Bearing)
     private var destLatLon: LatLonPoint? = null
     private var curLocation: AMapNaviLocation? = null
+
+    // 增加一个 Flow 用于专门分发偏角数据
+    private val _beltAngleFlow = MutableSharedFlow<Float>(extraBufferCapacity = 1)
+    val beltAngleFlow = _beltAngleFlow.asSharedFlow()
 
     // 外部回调给腰带
     var beltCallback: BeltNavigationCallback? = null
@@ -134,6 +140,8 @@ class NavigationManager private constructor(private val context: Context) : AMap
             onError("导航服务未初始化")
             return
         }
+
+
 
         Thread {
             try {
@@ -344,6 +352,7 @@ class NavigationManager private constructor(private val context: Context) : AMap
         if (relativeAngle > 180) relativeAngle -= 360
         // 回调给腰带 (例如: relativeAngle > 0 偏右，< 0 偏左)
         beltCallback?.onBeltNavigationUpdate(relativeAngle.toFloat(), lastDistance)
+        _beltAngleFlow.tryEmit(relativeAngle.toFloat())
     }
 
     private fun calculateBearing(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
@@ -371,7 +380,7 @@ class NavigationManager private constructor(private val context: Context) : AMap
         }
     }
 
-    //手机朝向或者位置发送变化时会触发
+    //手机朝向或者位置发送变化时会触发,又好像是1s一回调
     override fun onNaviInfoUpdate(naviInfo: NaviInfo?) {
         naviInfo?.let { info ->
             val path = mAMapNavi?.naviPath
