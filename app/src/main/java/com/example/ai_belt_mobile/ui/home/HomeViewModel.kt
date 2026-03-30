@@ -81,7 +81,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         BleManager(getApplication<Application>().applicationContext, bleListener)
     }
 
-    private val targetMac = "80:B5:4E:C5:3E:0D"
+    private val targetMac = "50:78:7D:15:9A:B1"
 
     private val _bleEmergencyEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     val bleEmergencyEvents = _bleEmergencyEvents.asSharedFlow()
@@ -102,6 +102,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val ttsManager: SparkChainTTSManager by lazy {
         SparkChainTTSManager.getInstance()
     }
+
+    private val start = MutableStateFlow(false)
+    val startNavigation: StateFlow<Boolean> = start.asStateFlow()
+    private val dest= MutableStateFlow("")
+    val destination: StateFlow<String> = dest.asStateFlow()
     // endregion
 
     // region 语音模块 - API
@@ -139,11 +144,17 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                                         when(response.mean?.want){
                                             "navigation"->{
                                                 //后续将点击开始导航的逻辑移动到这里
+                                                dest.value=response.mean.where?:""
+                                                start.value = true
                                             }
                                             "recognition"->{
                                                 response.mean.what?.let {
+                                                    Log.d("HomeViewModel", "识别结果: $it")
                                                     ttsManager.speak(it)
                                                 }
+                                            }
+                                            else->{
+                                                ttsManager.speak("暂不支持该功能")
                                             }
                                         }
                                     }
@@ -181,6 +192,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             Log.e("HomeViewModel", "Error initializing ASR module", e)
             asr = null
         }
+    }
+    fun resetStartNavigation() {
+        start.value = false
     }
 
     fun startVoiceRecognition() {
@@ -431,7 +445,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             navigationManager.beltAngleFlow.collect { angle ->
                 if (angle > 30.0 || angle < -30.0) {
-                    val angleString = "ANGLE:$angle"
+                    val angleString = "change:$angle"
                     val sent = sendOnCommand(angleString)
                     Log.i("HomeViewModel", "后台发送偏角数据: $angleString, 发送结果: $sent")
                 }

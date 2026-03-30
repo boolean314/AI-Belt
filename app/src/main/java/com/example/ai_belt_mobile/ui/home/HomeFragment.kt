@@ -65,6 +65,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
     private val locationManager by lazy {
         com.example.ai_belt_mobile.navigation.LocationManager(requireContext())
     }
+    var destination = ""
     // endregion
     private val blePermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -82,27 +83,35 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
         initVoiceView()
         initBleView()
         initNavigationView()
-
         initWebSocketDemoActions()
+        scope.launch {
+            viewModel.startNavigation.collect {
+                if (it) {
+                    startNavigation()
+                }
+            }
+        }
+        scope.launch {
+            viewModel.destination.collect {
+                destination = it
+                Log.d("HomeFragment", "destination: $destination")
+            }
+        }
     }
 
     // region 导航模块
     private fun initNavigationView() {
         // 初始化导航
         viewModel.initNavigation()
-        
         // 导航按钮点击事件
-        binding.startNavigationButton.setOnClickListener {
-            startNavigation()
-        }
     }
 
     private fun startNavigation() {
-        val destination = binding.destinationInput.text.toString().trim()
         if (destination.isEmpty()) {
             showToast("请输入目的地")
             return
         }
+        viewModel.resetStartNavigation()
         
         // 在Fragment中请求定位权限
         XXPermissions.with(requireActivity())
