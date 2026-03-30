@@ -23,6 +23,8 @@ import com.example.ai_belt_mobile.viewModel.DialogFindPasswordVM
 import com.example.ai_belt_mobile.viewModel.LoginVM
 import kotlin.getValue
 import kotlin.or
+import kotlin.text.clear
+import kotlin.text.get
 import kotlin.toString
 
 class LoginActivity : AppCompatActivity() {
@@ -34,6 +36,28 @@ class LoginActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val session = UserSessionStore.get(this)
+        if (session != null) {
+            val target = when (session.identity) {
+                0 -> MainActivity::class.java
+                1 -> FamilyMainActivity::class.java
+                else -> null
+            }
+
+            if (target != null) {
+                startActivity(
+                    Intent(this, target).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    }
+                )
+                finish()
+                return
+            } else {
+                UserSessionStore.clear(this)
+            }
+        }
+
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
         binding.viewModel = viewModel

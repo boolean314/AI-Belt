@@ -75,7 +75,7 @@ dependencies {
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
-    // SparkChain SDK+百度SDK
+    // SparkChain SDK
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
 
     // 权限请求框架：https://github.com/getActivity/XXPermissions
@@ -84,8 +84,6 @@ dependencies {
     //内部自动解析为JSON
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.jakewharton.retrofit:retrofit2-kotlin-coroutines-adapter:0.9.2")
-    //百度地图SDK
-    //百度地图SDK
 
     implementation("androidx.cardview:cardview:1.0.0")
     implementation("androidx.recyclerview:recyclerview:1.2.1")

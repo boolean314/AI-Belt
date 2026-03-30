@@ -62,6 +62,7 @@ class FamilyMainActivity : AppCompatActivity() {
         setupBottomNav()
 
         observeWsConnectionTip()
+        viewPager.isUserInputEnabled=false
     }
 
     private fun setupViewPager() {
