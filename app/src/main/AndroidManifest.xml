@@ -39,10 +39,10 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/launcher"
         android:label="@string/app_name"
         android:requestLegacyExternalStorage="true"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@drawable/launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.AI_Belt_Mobile"
         android:usesCleartextTraffic="true">
@@ -52,7 +52,7 @@
         <!-- 高德地图API Key -->
         <meta-data
             android:name="com.amap.api.v2.apikey"
-            android:value="b19540fe736aed9b08a7171548a3704c"/>
+            android:value="02ccbb58f829962c0c86d25db137643f"/>
 
 
         <activity

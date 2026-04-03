@@ -1,5 +1,6 @@
 package com.example.ai_belt_mobile.network
 
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,8 +28,7 @@ sealed class WsEvent {
 
 object WebSocketManager {
 
-    private const val WS_HOST = "ws://192.168.1.156:8080"
-
+    private const val WS_HOST = "ws://47.113.224.195:32406"
     private val connection: WebSocketContract = WebSocketConnection()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -61,6 +61,7 @@ object WebSocketManager {
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                Log.i("WebSocketManager", "WS收到：$text")
                 _events.tryEmit(WsEvent.Message(text))
             }
 

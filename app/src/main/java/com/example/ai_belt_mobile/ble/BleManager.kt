@@ -81,6 +81,7 @@ class BleManager(
         gatt?.disconnect()
         gatt?.close()
         gatt = null
+        listener.onDisconnected()
     }
 
     @SuppressLint("MissingPermission")

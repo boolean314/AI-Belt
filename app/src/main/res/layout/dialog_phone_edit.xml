@@ -33,32 +33,48 @@
             android:layout_gravity="center_horizontal"
             android:padding="10dp">
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/edit_account_layout"
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="5dp"
                 android:layout_marginStart="5dp"
                 android:layout_marginEnd="5dp"
-                android:layout_gravity="center_horizontal"
-                app:boxCornerRadiusBottomEnd="30dp"
-                app:boxCornerRadiusBottomStart="30dp"
-                app:boxCornerRadiusTopEnd="30dp"
-                app:boxCornerRadiusTopStart="30dp">
+                android:layout_gravity="center_horizontal">
 
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/edit_account"
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/edit_account_layout"
                     android:layout_width="match_parent"
-                    android:minWidth="200dp"
-                    android:minHeight="56dp"
-                    android:paddingTop="17dp"
-                    android:paddingBottom="12dp"
                     android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:hint="手机号码"
-                    android:text="@{viewModel.newPhone}"/>
+                    app:hintEnabled="false"
+                    app:boxCornerRadiusBottomEnd="30dp"
+                    app:boxCornerRadiusBottomStart="30dp"
+                    app:boxCornerRadiusTopEnd="30dp"
+                    app:boxCornerRadiusTopStart="30dp">
 
-            </com.google.android.material.textfield.TextInputLayout>
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/edit_account"
+                        android:layout_width="match_parent"
+                        android:minWidth="200dp"
+                        android:minHeight="56dp"
+                        android:singleLine="true"
+                        android:maxLines="1"
+                        android:imeOptions="actionDone"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:hint="手机号码"
+                        android:text="@{viewModel.newPhone}"/>
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <ImageView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="start|center_vertical"
+                    android:layout_marginStart="14dp"
+                    android:src="@drawable/phone"
+                    android:contentDescription="@null"/>
+
+            </FrameLayout>
 
             <com.dd.CircularProgressButton
                 android:id="@+id/ensure_button"

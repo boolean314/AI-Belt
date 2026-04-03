@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="16dp">
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/forget_password_card"
+        android:layout_width="300dp"
+        android:layout_height="350dp"
+        android:layout_margin="10dp"
+        android:layout_gravity="center"
+        app:cardElevation="6dp"
+        app:cardCornerRadius="24dp"
+        app:cardBackgroundColor="#FFFFFF"
+        app:strokeColor="#33FFFFFF"
+        app:strokeWidth="1dp">
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="24dp"
+            android:scrollbars="vertical"> <!-- 显示垂直滚动条（可选） -->
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:text="尊敬的用户:\n        欢迎使用AI-Belt智能视障辅助腰带，我们致力于打造一款能够帮助视障人士安全、便捷出行的智能设备。通过集成先进的传感器和AI技术，AI-Belt能够实时监测周围环境，提供语音导航和障碍物警示，帮助用户更好地感知周围世界。我们希望AI-Belt能够成为您出行的得力助手，让您的每一次出行都更加安心和愉快！\n\n本App会向您请求以下权限：\n\n1. 位置权限：用于提供精准的导航服务，帮助您安全出行。\n2. 蓝牙权限：用于连接和控制AI-Belt设备，实现数据传输和功能交互。\n3. 存储权限：用于保存您的个人设置和导航数据，提升使用体验。\n4. 摄像头权限：用于实现环境感知功能，帮助您更好地了解周围环境。\n5. 麦克风权限：用于实现语音交互功能，让您能够通过语音指令控制设备。\n6. 振动权限：用于在导航过程中提供震动提示，增强安全性。\n7. 网络权限：用于获取实时交通信息和地图数据，提升导航准确性。\n\n我们承诺将严格保护您的隐私和数据安全，所有收集的信息仅用于提供更好的服务体验，不会泄露给第三方。感谢您的信任与支持！"
+                    android:textSize="15sp"
+                    android:lineSpacingExtra="2dp"/>
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+        </ScrollView>
+
+    </com.google.android.material.card.MaterialCardView>
+
+</FrameLayout>

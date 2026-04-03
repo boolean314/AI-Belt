@@ -40,6 +40,7 @@ import com.example.ai_belt_mobile.navigation.WalkNaviActivity
 import com.example.ai_belt_mobile.network.UserRetrofitClient
 import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.network.WsEvent
+import com.example.ai_belt_mobile.voice.SparkChainTTSManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.last
 import org.json.JSONObject
@@ -223,6 +224,27 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
             when (viewModel.bleState.value) {
                 HomeBleState.Disconnected, is HomeBleState.Error -> ensureBlePermissionThenScan()
                 is HomeBleState.Connecting, is HomeBleState.Connected -> Unit
+            }
+        }
+
+        cardConnectStatus.setOnLongClickListener {
+            if(viewModel.bleState.value is HomeBleState.Connected) {
+                val vibrator = requireContext().getSystemService(android.os.Vibrator::class.java)
+                if (vibrator != null && vibrator.hasVibrator()) {
+                    vibrator.vibrate(80)
+                }
+                androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                    .setTitle("断开连接")
+                    .setMessage("确定要断开当前设备连接吗？")
+                    .setPositiveButton("断开") { _, _ ->
+                        viewModel.disconnect()
+                        showToast("已断开连接")
+                    }
+                    .setNegativeButton("取消", null)
+                    .show()
+                true
+            } else {
+                false
             }
         }
     }
@@ -522,32 +544,53 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
 
                         try {
                             val root = JSONObject(event.text)
-                            if (root.optString("type") != "request") return@collect
+                            when (root.optString("type")) {
+                                "request" -> {
+                                    val session =
+                                        UserSessionStore.get(requireContext()) ?: return@collect
+                                    val myId = session.id.toString()
+                                    val toId = root.optString("toId")
+                                    if (toId != myId) return@collect
 
-                            val session = UserSessionStore.get(requireContext()) ?: return@collect
-                            val myId = session.id.toString()
-                            val toId = root.optString("toId")
-                            if (toId != myId) return@collect
+                                    val fromFamilyId = root.optString("fromId")
+                                    if (fromFamilyId.isBlank()) return@collect
 
-                            val fromFamilyId = root.optString("fromId")
-                            if (fromFamilyId.isBlank()) return@collect
+                                    val ok = WebSocketManager.sendLocation(
+                                        fromId = myId,
+                                        toId = fromFamilyId,
+                                        longitude = lng,
+                                        latitude = lat,
+                                        time = System.currentTimeMillis().toString()
+                                    )
 
-                            val ok = WebSocketManager.sendLocation(
-                                fromId = myId,
-                                toId = fromFamilyId,
-                                longitude = lng, // 定位失败时为空字符串
-                                latitude = lat,  // 定位失败时为空字符串
-                                time = System.currentTimeMillis().toString()
-                            )
+                                    if (ok) {
+                                        if (location == null) showToast("定位失败，已返回空定位")
+                                        else showToast("已响应家属定位请求")
+                                    } else {
+                                        showToast("定位响应失败：WebSocket未连接")
+                                    }
+                                }
 
-                            if (ok) {
-                                if (location == null) showToast("定位失败，已返回空定位")
-                                else showToast("已响应家属定位请求")
-                            } else {
-                                showToast("定位响应失败：WebSocket未连接")
+                                "ai_message" -> {
+                                    val msg = root.optJSONObject("data")?.optString("Message")
+                                        .orEmpty()
+                                        .ifBlank {
+                                            root.optJSONObject("data")?.optString("message")
+                                                .orEmpty()
+                                        }
+
+                                    if (msg.isNotBlank()) {
+                                        SparkChainTTSManager.getInstance().speak(msg)
+                                    } else {
+                                        Log.w(
+                                            "HomeFragment",
+                                            "ai_message 收到但文案为空: ${event.text}"
+                                        )
+                                    }
+                                }
                             }
-                        } catch (_: Exception) {
-                            //忽略非JSON或非协议消息
+                        } catch (e: Exception) {
+                            Log.w("HomeFragment", "WS 消息解析失败: ${event.text}", e)
                         }
                     }
                 }
@@ -563,8 +606,8 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                     val now = System.currentTimeMillis()
                     if (now - lastEmergencyDialogTs < 2000) return@collect
                     lastEmergencyDialogTs = now
-                    showEmergencyHelpDialog()
-                    //askNeedHelp()
+                    //showEmergencyHelpDialog()
+                    askNeedHelp()
                 }
             }
         }
@@ -594,21 +637,40 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
         ttsManager.speak(promptText)
         viewLifecycleOwner.lifecycleScope.launch {
             kotlinx.coroutines.delay(4000) // 等待TTS播报完成
+            viewModel.clearRecognitionCache()
             requestAudioPermission()
             viewModel.startVoiceRecognition()
             val result = kotlinx.coroutines.withTimeoutOrNull(5000) {
                 viewModel.recognitionResult.first{ it.isNotEmpty() && !it.contains("正在识别")&&it.contains("。")  }
             }
             viewModel.stopVoiceRecognition()
-            if (result == null) {
+            val text = result
+                ?.replace("识别结果:", "")
+                ?.replace("\n", "")
+                ?.trim()
+                .orEmpty()
+
+            if (text.isBlank()) {
                 showToast("未检测到回应，已触发紧急求救")
                 triggerSosAction()
-            } else if (result.contains("要")) {
+            } else if (
+                text.contains("不需要") ||
+                text.contains("不用") ||
+                text.contains("不要")
+            ) {
+                showToast("暂时不需要帮助")
+            } else if (
+                text.contains("需要") ||
+                text.contains("要")
+            ) {
                 showToast("已确认需要帮助，已触发紧急求救")
                 triggerSosAction()
-            } else if (result.contains("不")) {
-                showToast("暂时不需要帮助")
+            } else {
+                showToast("未识别到明确意图，默认不触发SOS")
             }
+
+            viewModel.clearRecognitionCache()
+            viewModel.setEmergencyVoiceRecognition(false)
         }
     }
 }

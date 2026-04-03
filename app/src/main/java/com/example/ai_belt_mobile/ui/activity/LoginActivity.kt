@@ -1,16 +1,20 @@
 package com.example.ai_belt_mobile.ui.activity
 
+import android.app.Dialog
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContentProviderCompat.requireContext
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.doAfterTextChanged
@@ -19,6 +23,7 @@ import com.example.ai_belt_mobile.FamilyMainActivity
 import com.example.ai_belt_mobile.R
 import com.example.ai_belt_mobile.data.local.UserSessionStore
 import com.example.ai_belt_mobile.databinding.ActivityLoginBinding
+import com.example.ai_belt_mobile.databinding.DialogInfoBinding
 import com.example.ai_belt_mobile.viewModel.DialogFindPasswordVM
 import com.example.ai_belt_mobile.viewModel.LoginVM
 import kotlin.getValue
@@ -32,6 +37,8 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var binding: ActivityLoginBinding
     private val viewModel: LoginVM by viewModels()
     private val forgetPasswordVM: DialogFindPasswordVM by viewModels()
+    private var passwordVisible = false
+    private var currentDialog: Dialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +69,8 @@ class LoginActivity : AppCompatActivity() {
         setContentView(binding.root)
         binding.viewModel = viewModel
         binding.lifecycleOwner = this
+
+        setupPasswordToggle()
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -111,7 +120,27 @@ class LoginActivity : AppCompatActivity() {
             showFindPasswordDialog()
         }
 
+        binding.infoBtn.setOnClickListener {
+            showInfoDialog()
+        }
+
         refreshLoginBtn()
+    }
+
+    private fun setupPasswordToggle() {
+        binding.passwordToggleBtn.setOnClickListener {
+            passwordVisible = !passwordVisible
+
+            binding.loginPassword.transformationMethod =
+                if (passwordVisible) null
+                else android.text.method.PasswordTransformationMethod.getInstance()
+            binding.loginPassword.setSelection(binding.loginPassword.text?.length ?: 0)
+
+            binding.passwordToggleBtn.setImageResource(
+                if (passwordVisible) R.drawable.eye_inset
+                else R.drawable.eye_closed_inset
+            )
+        }
     }
 
     private fun showFindPasswordDialog() {
@@ -187,6 +216,29 @@ class LoginActivity : AppCompatActivity() {
         refreshSubmitButtonState()
         dialog.show()
 
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.setLayout(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+    }
+
+    private fun showInfoDialog() {
+        val dialogBinding = DialogInfoBinding.inflate(LayoutInflater.from(this))
+        val dialog = createStyledDialog(dialogBinding.root)
+        showStyledDialog(dialog)
+    }
+
+    private fun createStyledDialog(contentView: View): AlertDialog {
+        return AlertDialog.Builder(this)
+            .setView(contentView)
+            .create()
+    }
+
+    private fun showStyledDialog(dialog: Dialog) {
+        currentDialog?.dismiss()
+        currentDialog = dialog
+        dialog.show()
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         dialog.window?.setLayout(
             ViewGroup.LayoutParams.MATCH_PARENT,
