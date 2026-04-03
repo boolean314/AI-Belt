@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai_belt_mobile.ble.BleManager
+import com.example.ai_belt_mobile.data.local.UserSessionStore
 import com.example.ai_belt_mobile.data.remote.RecognitionRequest
 import com.example.ai_belt_mobile.navigation.LocationManager
 import com.example.ai_belt_mobile.voice.SparkChainTTSManager
@@ -24,6 +25,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.example.ai_belt_mobile.data.remote.AiResponse
+import kotlin.io.writeText
+import kotlin.text.get
 import kotlin.text.toHexString
 
 sealed interface HomeBleState {
@@ -273,6 +276,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    fun clearRecognitionCache() {
+        _recognitionResult.value = ""
+        _text.value = null
+    }
     // endregion
 
     // region BLE模块 - API
@@ -290,7 +298,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         override fun onNotifyReady() {
-            requestBattery()
+            sendCurrentDisabilityIdToBoard()
+            viewModelScope.launch {
+                kotlinx.coroutines.delay(120)
+                requestBattery()
+            }
         }
 
         override fun onDisconnected() {
@@ -347,28 +359,32 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         bleManager.connect(device, getApplication<Application>().applicationContext)
     }
 
-    fun disconnect() = bleManager.disconnect()
+    fun disconnect() {
+        bleManager.disconnect()
+        _bleState.value = HomeBleState.Disconnected
+    }
 
     private fun requestBattery() {
         bleManager.write("BAT?\n".toByteArray())
     }
 
-    //    private fun parseBattery(bytes: ByteArray): Int? {
-//        val text = bytes.toString(Charsets.UTF_8).trim()
-//        Regex("(?i)(?:BAT|BATT|BATTERY)\\s*[:=]\\s*(\\d{1,3})")
-//            .find(text)
-//            ?.groupValues
-//            ?.getOrNull(1)
-//            ?.toIntOrNull()
-//            ?.let { return it.coerceIn(0, 100) }
-//
-//        text.toIntOrNull()?.let { return it.coerceIn(0, 100) }
-//        if (bytes.size == 1) {
-//            val value = bytes[0].toInt() and 0xFF
-//            if (value in 0..100) return value
-//        }
-//        return null
-//    }
+    private fun sendCurrentDisabilityIdToBoard() {
+        val appContext = getApplication<Application>().applicationContext
+        val session = UserSessionStore.get(appContext)
+
+        if (session == null) {
+            Log.w("HomeViewModel", "发送残疾人ID失败：未登录会话")
+            return
+        }
+        if (session.identity != 0) {
+            Log.d("HomeViewModel", "当前不是残疾人端(identity=${session.identity})，跳过发送ID")
+            return
+        }
+
+        val payload = "Id:${session.id}\n"
+        val status = sendOnCommand(payload)
+        Log.i("HomeViewModel", "发送给板子的内容: $payload, 已发送残疾人ID到板子: $status")
+    }
 
     private fun parseBatteryText(text: String): Int? {
         // 支持 BAT:78 / BATTERY=78 / 78

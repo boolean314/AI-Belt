@@ -40,7 +40,6 @@ class FamilyMainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
-        WebSocketManager.disconnect()
         super.onStop()
     }
 

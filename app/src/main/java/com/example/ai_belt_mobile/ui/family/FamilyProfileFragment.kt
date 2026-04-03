@@ -22,6 +22,7 @@ import com.example.ai_belt_mobile.databinding.DialogNameEditBinding
 import com.example.ai_belt_mobile.databinding.DialogPasswordEditBinding
 import com.example.ai_belt_mobile.databinding.DialogPhoneEditBinding
 import com.example.ai_belt_mobile.databinding.FragmentFamilyProfileBinding
+import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.ui.activity.LoginActivity
 import com.example.ai_belt_mobile.ui.activity.ScanActivity
 import com.example.ai_belt_mobile.ui.home.ProfileViewModel
@@ -70,6 +71,7 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
         binding.phoneEdit.setOnClickListener { showEditPhoneDialog() }
 
         binding.logoutButton.setOnClickListener {
+            WebSocketManager.disconnect()
             UserSessionStore.clear(requireContext())
             startActivity(
                 Intent(requireContext(), LoginActivity::class.java).apply {

@@ -3,10 +3,21 @@ package com.example.ai_belt_mobile
 import android.app.Application
 import com.amap.api.navi.NaviSetting
 import com.amap.apis.utils.core.api.AMapUtilCoreApi
+import com.example.ai_belt_mobile.network.WebSocketManager
+import com.example.ai_belt_mobile.network.WsEvent
+import com.example.ai_belt_mobile.voice.SparkChainTTSManager
 import com.iflytek.sparkchain.core.SparkChain
 import com.iflytek.sparkchain.core.SparkChainConfig
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 class AI_Belt_Application : Application() {
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     //全局初始化SparkChain
     override fun onCreate() {
         super.onCreate()
@@ -31,6 +42,24 @@ class AI_Belt_Application : Application() {
             println("SparkChain init success")
         } else {
             println("SparkChain init failed, error code: $ret")
+        }
+
+        SparkChainTTSManager.getInstance().init(applicationContext)
+
+        appScope.launch {
+            WebSocketManager.events.collect { event ->
+                if (event !is WsEvent.Message) return@collect
+
+                runCatching {
+                    val root = JSONObject(event.text)
+                    if (root.optString("type") == "ai_message") {
+                        val msg = root.optJSONObject("data")?.optString("Message").orEmpty()
+                        if (msg.isNotBlank()) {
+                            SparkChainTTSManager.getInstance().speak(msg)
+                        }
+                    }
+                }
+            }
         }
     }
 

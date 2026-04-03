@@ -28,6 +28,7 @@ import com.amap.api.services.geocoder.RegeocodeQuery
 import com.amap.api.services.geocoder.RegeocodeResult
 import com.amap.api.services.geocoder.GeocodeSearch.OnGeocodeSearchListener
 import com.amap.api.services.geocoder.GeocodeResult
+import com.example.ai_belt_mobile.voice.SparkChainTTSManager
 import org.json.JSONObject
 import kotlin.text.append
 
@@ -54,7 +55,6 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
         super.onViewCreated(view, savedInstanceState)
 
         topCard = view.findViewById(R.id.scan_qr_card)
-        // topAddressText = view.findViewById(R.id.top_address_text) // 已删除
         warningText = view.findViewById(R.id.warning_text)
         locationText = view.findViewById(R.id.location_text)
         emergencyCard = view.findViewById(R.id.warning_card)
@@ -76,7 +76,6 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
         warningText.text = "暂无紧急情况"
         locationText.text = "点击卡片向残疾人端请求最新地址"
 
-        // 原来是 topAddressText 的点击，这里改为点击整张 topCard
         emergencyCard.setOnClickListener {
             requestLocationFromDisability()
         }
@@ -171,7 +170,6 @@ class FamilyFragment : Fragment(R.layout.fragment_family) {
     }
 
     private fun observeWsEvents() {
-        // 顶部 TextView 删除后，连接状态提示挪到底部
         if (WebSocketManager.isConnected.value) {
             warningText.text = "WebSocket已连接"
             locationText.text = "点击上方卡片请求定位"

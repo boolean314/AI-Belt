@@ -25,6 +25,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.ai_belt_mobile.data.local.UserSessionStore
+import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.ui.activity.LoginActivity
 import kotlinx.coroutines.launch
 import kotlin.or
@@ -62,6 +63,7 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
         binding.homepageEditPhoneCard.setOnClickListener { showEditPhoneDialog() }
         binding.phoneEdit.setOnClickListener { showEditPhoneDialog() }
         binding.logoutButton.setOnClickListener {
+            WebSocketManager.disconnect()
             UserSessionStore.clear(requireContext())
             startActivity(
                 Intent(requireContext(), LoginActivity::class.java).apply {
