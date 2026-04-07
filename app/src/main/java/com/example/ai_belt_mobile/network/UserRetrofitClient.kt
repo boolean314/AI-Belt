@@ -21,9 +21,8 @@ object UserRetrofitClient {
         val gson: Gson = GsonBuilder()
             .registerTypeAdapter(LocalDateTime::class.java, LocalDataTimeDeserializer()) //自定义解析器
             .create()
-
         Retrofit.Builder()
-            .baseUrl("http://47.113.224.195:32406/api/v1/")    //lrt：http://47.113.224.195:32406 //dyy：http://192.168.1.109:8080/
+            .baseUrl("http://134.175.191.37:36769/api/v1/")
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

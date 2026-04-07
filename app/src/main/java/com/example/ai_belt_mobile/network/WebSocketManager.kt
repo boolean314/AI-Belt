@@ -28,7 +28,7 @@ sealed class WsEvent {
 
 object WebSocketManager {
 
-    private const val WS_HOST = "ws://47.113.224.195:32406"
+    private const val WS_HOST = "ws://134.175.191.37:36769"
     private val connection: WebSocketContract = WebSocketConnection()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

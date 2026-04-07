@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools">
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <data>
         <variable
@@ -10,287 +8,353 @@
             type="com.example.ai_belt_mobile.viewModel.RegisterVM" />
     </data>
 
-    <androidx.constraintlayout.widget.ConstraintLayout
+    <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:background="#F7F8FC">
 
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/register_card"
-            android:layout_width="300dp"
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:cardBackgroundColor="@android:color/white"
-            app:cardCornerRadius="24dp"
-            app:cardElevation="8dp"
-            app:strokeWidth="0dp">
+            android:paddingBottom="24dp">
 
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:padding="8dp">
+            <LinearLayout
+                android:id="@+id/register_header"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginTop="48dp"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent">
 
-                <FrameLayout
-                    android:id="@+id/register_title_row"
-                    android:layout_width="match_parent"
+                <TextView
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginStart="20dp"
-                    android:layout_marginEnd="20dp"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent">
+                    android:text="创建账号"
+                    android:textColor="#4F46E5"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
 
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/register_account_layout"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        app:hintEnabled="false"
-                        app:boxCornerRadiusBottomEnd="30dp"
-                        app:boxCornerRadiusBottomStart="30dp"
-                        app:boxCornerRadiusTopEnd="30dp"
-                        app:boxCornerRadiusTopStart="30dp">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/register_account"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center"
-                            android:hint="请输入邮箱"
-                            android:text="@{viewModel.account}"
-                            android:minHeight="56dp"
-                            android:singleLine="true"
-                            android:maxLines="1"
-                            android:imeOptions="actionNext" />
-
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <ImageView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="start|center_vertical"
-                        android:layout_marginStart="14dp"
-                        android:src="@drawable/mail"
-                        android:contentDescription="@null" />
-
-                </FrameLayout>
-
-                <FrameLayout
-                    android:id="@+id/register_name_row"
-                    android:layout_width="match_parent"
+                <TextView
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginStart="20dp"
-                    android:layout_marginEnd="20dp"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@+id/register_title_row">
+                    android:layout_marginTop="8dp"
+                    android:text="欢迎使用 AI Belt"
+                    android:textColor="#111827"
+                    android:textSize="32sp"
+                    android:textStyle="bold" />
 
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/register_name_layout"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        app:hintEnabled="false"
-                        app:boxCornerRadiusBottomEnd="30dp"
-                        app:boxCornerRadiusBottomStart="30dp"
-                        app:boxCornerRadiusTopEnd="30dp"
-                        app:boxCornerRadiusTopStart="30dp">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/register_name"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center"
-                            android:hint="请输入用户名"
-                            android:text="@{viewModel.name}"
-                            android:minHeight="56dp"
-                            android:singleLine="true"
-                            android:maxLines="1"
-                            android:imeOptions="actionNext" />
-
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <ImageView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="start|center_vertical"
-                        android:layout_marginStart="14dp"
-                        android:src="@drawable/name"
-                        android:contentDescription="@null" />
-
-                </FrameLayout>
-
-                <FrameLayout
-                    android:id="@+id/register_password_row"
-                    android:layout_width="match_parent"
+                <TextView
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginStart="20dp"
-                    android:layout_marginEnd="20dp"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@+id/register_name_row">
+                    android:layout_marginTop="8dp"
+                    android:text="请完善信息，快速完成注册"
+                    android:textColor="#6B7280"
+                    android:textSize="13sp" />
 
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/register_password_layout"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        app:hintEnabled="false"
-                        app:boxCornerRadiusBottomEnd="30dp"
-                        app:boxCornerRadiusBottomStart="30dp"
-                        app:boxCornerRadiusTopEnd="30dp"
-                        app:boxCornerRadiusTopStart="30dp">
+            </LinearLayout>
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/register_password"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center"
-                            android:hint="请输入密码"
-                            android:inputType="textPassword"
-                            android:text="@{viewModel.password}"
-                            android:minHeight="56dp"
-                            android:singleLine="true"
-                            android:maxLines="1"
-                            android:imeOptions="actionDone" />
-
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <ImageView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="start|center_vertical"
-                        android:layout_marginStart="16.5dp"
-                        android:src="@drawable/lock"
-                        android:contentDescription="@null" />
-
-                </FrameLayout>
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/register_card"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="20dp"
+                android:layout_marginEnd="20dp"
+                android:layout_marginTop="28dp"
+                app:layout_constraintTop_toBottomOf="@id/register_header"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:cardBackgroundColor="@android:color/white"
+                app:cardCornerRadius="28dp"
+                app:cardElevation="10dp"
+                app:strokeColor="#E5E7EB"
+                app:strokeWidth="1dp">
 
                 <androidx.constraintlayout.widget.ConstraintLayout
-                    android:id="@+id/register_verify_row"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginStart="20dp"
-                    android:layout_marginEnd="20dp"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@+id/register_password_row">
+                    android:padding="20dp">
 
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/register_verify_layout"
+                    <FrameLayout
+                        android:id="@+id/register_title_row"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginEnd="12dp"
-                        app:hintEnabled="false"
-                        app:boxCornerRadiusBottomEnd="30dp"
-                        app:boxCornerRadiusBottomStart="30dp"
-                        app:boxCornerRadiusTopEnd="30dp"
-                        app:boxCornerRadiusTopStart="30dp"
-                        app:layout_constraintBottom_toBottomOf="parent"
-                        app:layout_constraintEnd_toStartOf="@+id/btn_get_code"
                         app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
                         app:layout_constraintTop_toTopOf="parent">
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/register_verify"
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/register_account_layout"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:gravity="center"
-                            android:hint="请输入验证码"
-                            android:minHeight="56dp"
-                            android:singleLine="true"
-                            android:maxLines="1"
-                            android:imeOptions="actionNext"
-                            android:text="@{viewModel.verify}" />
-                    </com.google.android.material.textfield.TextInputLayout>
+                            app:hintEnabled="false"
+                            app:boxBackgroundMode="outline"
+                            app:boxCornerRadiusBottomEnd="20dp"
+                            app:boxCornerRadiusBottomStart="20dp"
+                            app:boxCornerRadiusTopEnd="20dp"
+                            app:boxCornerRadiusTopStart="20dp"
+                            app:boxStrokeColor="#CBD5E1"
+                            app:boxStrokeWidth="1dp">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btn_get_code"
-                        android:layout_width="wrap_content"
-                        android:layout_height="56dp"
-                        android:minWidth="88dp"
-                        android:text="获取"
-                        app:layout_constraintBottom_toBottomOf="@id/register_verify_layout"
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/register_account"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:hint="请输入邮箱"
+                                android:text="@{viewModel.account}"
+                                android:minHeight="56dp"
+                                android:singleLine="true"
+                                android:maxLines="1"
+                                android:imeOptions="actionNext" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <ImageView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="start|center_vertical"
+                            android:layout_marginStart="14dp"
+                            android:src="@drawable/mail"
+                            android:contentDescription="@null" />
+
+                    </FrameLayout>
+
+                    <FrameLayout
+                        android:id="@+id/register_name_row"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintEnd_toEndOf="parent"
-                        app:layout_constraintTop_toTopOf="@id/register_verify_layout" />
+                        app:layout_constraintTop_toBottomOf="@id/register_title_row">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/register_name_layout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:hintEnabled="false"
+                            app:boxBackgroundMode="outline"
+                            app:boxCornerRadiusBottomEnd="20dp"
+                            app:boxCornerRadiusBottomStart="20dp"
+                            app:boxCornerRadiusTopEnd="20dp"
+                            app:boxCornerRadiusTopStart="20dp"
+                            app:boxStrokeColor="#CBD5E1"
+                            app:boxStrokeWidth="1dp">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/register_name"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:hint="请输入用户名"
+                                android:text="@{viewModel.name}"
+                                android:minHeight="56dp"
+                                android:singleLine="true"
+                                android:maxLines="1"
+                                android:imeOptions="actionNext" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <ImageView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="start|center_vertical"
+                            android:layout_marginStart="14dp"
+                            android:src="@drawable/name"
+                            android:contentDescription="@null" />
+
+                    </FrameLayout>
+
+                    <FrameLayout
+                        android:id="@+id/register_password_row"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/register_name_row">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/register_password_layout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:hintEnabled="false"
+                            app:boxBackgroundMode="outline"
+                            app:boxCornerRadiusBottomEnd="20dp"
+                            app:boxCornerRadiusBottomStart="20dp"
+                            app:boxCornerRadiusTopEnd="20dp"
+                            app:boxCornerRadiusTopStart="20dp"
+                            app:boxStrokeColor="#CBD5E1"
+                            app:boxStrokeWidth="1dp">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/register_password"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:hint="请输入密码"
+                                android:inputType="textPassword"
+                                android:text="@{viewModel.password}"
+                                android:minHeight="56dp"
+                                android:singleLine="true"
+                                android:maxLines="1"
+                                android:imeOptions="actionDone" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <ImageView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="start|center_vertical"
+                            android:layout_marginStart="16.5dp"
+                            android:src="@drawable/lock"
+                            android:contentDescription="@null" />
+
+                    </FrameLayout>
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:id="@+id/register_verify_row"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/register_password_row">
+
+                        <FrameLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="12dp"
+                            app:layout_constraintBottom_toBottomOf="parent"
+                            app:layout_constraintEnd_toStartOf="@+id/btn_get_code"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintTop_toTopOf="parent">
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/register_verify_layout"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                app:hintEnabled="false"
+                                app:boxBackgroundMode="outline"
+                                app:boxCornerRadiusBottomEnd="20dp"
+                                app:boxCornerRadiusBottomStart="20dp"
+                                app:boxCornerRadiusTopEnd="20dp"
+                                app:boxCornerRadiusTopStart="20dp"
+                                app:boxStrokeColor="#CBD5E1"
+                                app:boxStrokeWidth="1dp">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/register_verify"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:gravity="center"
+                                    android:hint="请输入验证码"
+                                    android:minHeight="56dp"
+                                    android:singleLine="true"
+                                    android:maxLines="1"
+                                    android:imeOptions="actionNext"
+                                    android:text="@{viewModel.verify}" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <ImageView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="start|center_vertical"
+                                android:layout_marginStart="14dp"
+                                android:src="@drawable/verify"
+                                android:contentDescription="@null" />
+
+                        </FrameLayout>
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_get_code"
+                            android:layout_width="wrap_content"
+                            android:layout_height="56dp"
+                            android:minWidth="88dp"
+                            android:text="获取"
+                            app:layout_constraintBottom_toBottomOf="@id/register_verify_layout"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintTop_toTopOf="@id/register_verify_layout" />
+
+                    </androidx.constraintlayout.widget.ConstraintLayout>
+
+                    <FrameLayout
+                        android:id="@+id/register_phone_row"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/register_verify_row">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/register_phone_layout"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            app:hintEnabled="false"
+                            app:boxBackgroundMode="outline"
+                            app:boxCornerRadiusBottomEnd="20dp"
+                            app:boxCornerRadiusBottomStart="20dp"
+                            app:boxCornerRadiusTopEnd="20dp"
+                            app:boxCornerRadiusTopStart="20dp"
+                            app:boxStrokeColor="#CBD5E1"
+                            app:boxStrokeWidth="1dp">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/register_phone"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:hint="请输入手机号"
+                                android:text="@{viewModel.phone}"
+                                android:minHeight="56dp"
+                                android:singleLine="true"
+                                android:maxLines="1"
+                                android:imeOptions="actionDone" />
+
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <ImageView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="start|center_vertical"
+                            android:layout_marginStart="14dp"
+                            android:src="@drawable/phone"
+                            android:contentDescription="@null" />
+
+                    </FrameLayout>
+
+                    <com.dd.CircularProgressButton
+                        android:id="@+id/RegisterProgressButton"
+                        android:layout_width="0dp"
+                        android:layout_height="58dp"
+                        android:layout_marginTop="20dp"
+                        android:layout_marginBottom="4dp"
+                        android:text="注册"
+                        android:textColor="@android:color/white"
+                        android:textSize="18sp"
+                        app:cpb_cornerRadius="18dp"
+                        app:cpb_iconComplete="@drawable/correct"
+                        app:cpb_iconError="@drawable/wrong"
+                        app:cpb_selectorComplete="@drawable/success_state_selector"
+                        app:cpb_selectorError="@drawable/failed_state_selector"
+                        app:cpb_selectorIdle="@drawable/init_state_selector"
+                        app:cpb_textIdle="注册"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@id/register_phone_row" />
 
                 </androidx.constraintlayout.widget.ConstraintLayout>
 
-                <FrameLayout
-                    android:id="@+id/register_phone_row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginStart="20dp"
-                    android:layout_marginEnd="20dp"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@+id/register_verify_row">
+            </com.google.android.material.card.MaterialCardView>
 
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/register_phone_layout"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        app:hintEnabled="false"
-                        app:boxCornerRadiusBottomEnd="30dp"
-                        app:boxCornerRadiusBottomStart="30dp"
-                        app:boxCornerRadiusTopEnd="30dp"
-                        app:boxCornerRadiusTopStart="30dp">
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/register_phone"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="center"
-                            android:hint="请输入手机号"
-                            android:text="@{viewModel.phone}"
-                            android:minHeight="56dp"
-                            android:singleLine="true"
-                            android:maxLines="1"
-                            android:imeOptions="actionDone"  />
-
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <ImageView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="start|center_vertical"
-                        android:layout_marginStart="14dp"
-                        android:src="@drawable/phone"
-                        android:contentDescription="@null" />
-
-                </FrameLayout>
-
-                <com.dd.CircularProgressButton
-                    android:id="@+id/RegisterProgressButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="60dp"
-                    android:layout_marginStart="20dp"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginEnd="20dp"
-                    android:layout_marginBottom="20dp"
-                    android:text="注册"
-                    android:textColor="@android:color/white"
-                    android:textSize="24sp"
-                    app:cpb_cornerRadius="30dp"
-                    app:cpb_iconComplete="@drawable/correct"
-                    app:cpb_iconError="@drawable/wrong"
-                    app:cpb_selectorComplete="@drawable/success_state_selector"
-                    app:cpb_selectorError="@drawable/failed_state_selector"
-                    app:cpb_selectorIdle="@drawable/init_state_selector"
-                    app:cpb_textIdle="注册"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/register_phone_row" />
-
-            </androidx.constraintlayout.widget.ConstraintLayout>
-
-        </com.google.android.material.card.MaterialCardView>
-
-    </androidx.constraintlayout.widget.ConstraintLayout>
+    </androidx.core.widget.NestedScrollView>
 
 </layout>
