@@ -7,7 +7,7 @@ import android.media.MediaRecorder
 import android.util.Log
 import java.util.concurrent.atomic.AtomicBoolean
 
-class AudioRecorderManager private constructor() {
+class   AudioRecorderManager private constructor() {
 
     private val TAG = "AudioRecorder"
     private val sampleRateInHz = 16000
