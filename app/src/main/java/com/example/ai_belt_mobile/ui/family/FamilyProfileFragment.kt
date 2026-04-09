@@ -25,7 +25,6 @@ import com.example.ai_belt_mobile.databinding.FragmentFamilyProfileBinding
 import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.ui.activity.LoginActivity
 import com.example.ai_belt_mobile.ui.activity.ScanActivity
-import com.example.ai_belt_mobile.ui.home.ProfileViewModel
 import com.example.ai_belt_mobile.viewModel.DialogPasswordVM
 import com.example.ai_belt_mobile.viewModel.DialogPhoneVM
 import com.example.ai_belt_mobile.viewModel.DialogUserNameVM
@@ -60,6 +59,7 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
         binding.lifecycleOwner = viewLifecycleOwner
 
         viewModel.loadFromSession(requireContext())
+        renderSnapshot()
 
         binding.bindByCodeButton.setOnClickListener { showMemberBindDialog() }
         binding.bindByQrCodeButton.setOnClickListener { showMemberBindDialog() }
@@ -86,11 +86,68 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
         super.initData()
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.userName.collect { name ->
-                    binding.nameText.text = name
+                launch {
+                    viewModel.userId.collect { userId ->
+                        binding.familyUserIdValue.text = if (userId > 0) userId.toString() else "--"
+                    }
+                }
+
+                launch {
+                    viewModel.userName.collect { name ->
+                        binding.nameText.text = if (name.isBlank()) "未设置用户名" else name
+                    }
+                }
+
+                launch {
+                    viewModel.phone.collect { phone ->
+                        binding.familyPhoneValue.text = if (phone.isBlank()) "未设置" else phone
+                    }
+                }
+
+                launch {
+                    viewModel.mail.collect { mail ->
+                        binding.familyMailValue.text = if (mail.isBlank()) "未设置" else mail
+                    }
+                }
+
+                launch {
+                    viewModel.identity.collect { identity ->
+                        binding.familyRoleValue.text = when (identity) {
+                            0 -> "身份：视障端"
+                            1 -> "身份：家属端"
+                            else -> "身份：--"
+                        }
+                    }
+                }
+
+                launch {
+                    WebSocketManager.isConnected.collect { connected ->
+                        binding.familyWsStatusValue.text =
+                            if (connected) "WebSocket：已连接" else "WebSocket：未连接"
+                        binding.familyWsHint.text =
+                            if (connected) "连接稳定，可接收求助与定位消息"
+                            else "等待连接后可接收求助与定位消息"
+                    }
                 }
             }
         }
+    }
+
+    private fun renderSnapshot() {
+        binding.familyUserIdValue.text = viewModel.userId.value.takeIf { it > 0 }?.toString() ?: "--"
+        binding.nameText.text = viewModel.userName.value.ifBlank { "未设置用户名" }
+        binding.familyPhoneValue.text = viewModel.phone.value.ifBlank { "未设置" }
+        binding.familyMailValue.text = viewModel.mail.value.ifBlank { "未设置" }
+        binding.familyRoleValue.text = when (viewModel.identity.value) {
+            0 -> "身份：视障端"
+            1 -> "身份：家属端"
+            else -> "身份：--"
+        }
+        binding.familyWsStatusValue.text =
+            if (WebSocketManager.isConnected.value) "WebSocket：已连接" else "WebSocket：未连接"
+        binding.familyWsHint.text =
+            if (WebSocketManager.isConnected.value) "连接稳定，可接收求助与定位消息"
+            else "等待连接后可接收求助与定位消息"
     }
 
     private fun showMemberBindDialog() {
@@ -302,6 +359,7 @@ class FamilyProfileFragment : BaseFragment<FragmentFamilyProfileBinding>() {
         }
 
         val dialog = createStyledDialog(dialogBinding.root)
+
         dialogBinding.ensureButton.setOnClickListener {
             val err = vm.validate()
             if (err != null) {

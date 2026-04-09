@@ -9,28 +9,28 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
 import androidx.core.widget.doAfterTextChanged
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.ai_belt_mobile.R
 import com.example.ai_belt_mobile.base.BaseFragment
+import com.example.ai_belt_mobile.data.local.UserSessionStore
 import com.example.ai_belt_mobile.databinding.DialogNameEditBinding
 import com.example.ai_belt_mobile.databinding.DialogPasswordEditBinding
 import com.example.ai_belt_mobile.databinding.DialogPhoneEditBinding
 import com.example.ai_belt_mobile.databinding.FragmentProfileBinding
+import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.ui.activity.ChooseMemberActivity
+import com.example.ai_belt_mobile.ui.activity.LoginActivity
 import com.example.ai_belt_mobile.viewModel.DialogPasswordVM
 import com.example.ai_belt_mobile.viewModel.DialogPhoneVM
 import com.example.ai_belt_mobile.viewModel.DialogUserNameVM
 import com.google.android.material.textview.MaterialTextView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import com.example.ai_belt_mobile.data.local.UserSessionStore
-import com.example.ai_belt_mobile.network.WebSocketManager
-import com.example.ai_belt_mobile.ui.activity.LoginActivity
 import kotlinx.coroutines.launch
-import kotlin.or
 
 class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
+
     override val layoutId: Int = R.layout.fragment_profile
 
     private lateinit var viewModel: ProfileViewModel
@@ -43,6 +43,7 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
         binding.lifecycleOwner = viewLifecycleOwner
 
         viewModel.loadFromSession(requireContext())
+        renderSnapshot()
 
         binding.familyMemberCard.setOnClickListener {
             startActivity(Intent(requireContext(), ChooseMemberActivity::class.java))
@@ -62,6 +63,7 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
 
         binding.homepageEditPhoneCard.setOnClickListener { showEditPhoneDialog() }
         binding.phoneEdit.setOnClickListener { showEditPhoneDialog() }
+
         binding.logoutButton.setOnClickListener {
             WebSocketManager.disconnect()
             UserSessionStore.clear(requireContext())
@@ -78,11 +80,75 @@ class ProfileFragment : BaseFragment<FragmentProfileBinding>() {
         super.initData()
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.userName.collect { name ->
-                    binding.nameText.text = name
+                launch {
+                    viewModel.userId.collect { userId ->
+                        binding.profileUserIdValue.text = if (userId > 0) userId.toString() else "--"
+                    }
+                }
+
+                launch {
+                    viewModel.userName.collect { name ->
+                        binding.nameText.text = if (name.isBlank()) "未设置用户名" else name
+                    }
+                }
+
+                launch {
+                    viewModel.phone.collect { phone ->
+                        binding.profilePhoneValue.text = if (phone.isBlank()) "未设置" else phone
+                    }
+                }
+
+                launch {
+                    viewModel.mail.collect { mail ->
+                        binding.profileMailValue.text = if (mail.isBlank()) "未设置" else mail
+                    }
+                }
+
+                launch {
+                    viewModel.bindCode.collect { code ->
+                        binding.profileBindCodeValue.text = if (code.isBlank()) "暂未生成" else code
+                    }
+                }
+
+                launch {
+                    viewModel.identity.collect { identity ->
+                        binding.profileRoleValue.text = when (identity) {
+                            0 -> "身份：视障人士"
+                            1 -> "身份：家属"
+                            else -> "身份：--"
+                        }
+                    }
+                }
+
+                launch {
+                    WebSocketManager.isConnected.collect { connected ->
+                        binding.profileWsStatusValue.text =
+                            if (connected) "WebSocket：已连接" else "WebSocket：未连接"
+                        binding.profileWsHint.text =
+                            if (connected) "连接稳定，可接收协同消息与语音播报"
+                            else "等待连接后可接收协同消息与语音播报"
+                    }
                 }
             }
         }
+    }
+
+    private fun renderSnapshot() {
+        binding.profileUserIdValue.text = viewModel.userId.value.takeIf { it > 0 }?.toString() ?: "--"
+        binding.nameText.text = viewModel.userName.value.ifBlank { "未设置用户名" }
+        binding.profilePhoneValue.text = viewModel.phone.value.ifBlank { "未设置" }
+        binding.profileMailValue.text = viewModel.mail.value.ifBlank { "未设置" }
+        binding.profileBindCodeValue.text = viewModel.bindCode.value.ifBlank { "暂未生成" }
+        binding.profileRoleValue.text = when (viewModel.identity.value) {
+            0 -> "身份：视障端"
+            1 -> "身份：家属端"
+            else -> "身份：--"
+        }
+        binding.profileWsStatusValue.text =
+            if (WebSocketManager.isConnected.value) "WebSocket：已连接" else "WebSocket：未连接"
+        binding.profileWsHint.text =
+            if (WebSocketManager.isConnected.value) "连接稳定，可接收协同消息与语音播报"
+            else "等待连接后可接收协同消息与语音播报"
     }
 
     private fun showBindCodeDialog(showQr: Boolean) {
