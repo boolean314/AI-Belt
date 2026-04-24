@@ -41,10 +41,12 @@ import com.example.ai_belt_mobile.network.UserRetrofitClient
 import com.example.ai_belt_mobile.network.WebSocketManager
 import com.example.ai_belt_mobile.network.WsEvent
 import com.example.ai_belt_mobile.voice.SparkChainTTSManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.last
 import org.json.JSONObject
 import kotlin.code
+import kotlin.concurrent.thread
 import kotlin.text.get
 import kotlin.toString
 
@@ -385,7 +387,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
 
                 if (elapsed >= SOS_HOLD_DURATION_MS) {
                     sosTriggered = true
-                    triggerSosAction() // 这里调用你现有SOS发送+拨号逻辑
+                    triggerSosAction()
                     break
                 }
                 kotlinx.coroutines.delay(16L)
@@ -400,7 +402,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
             return
         }
 
-        // 检查定位权限
         XXPermissions.with(requireActivity())
             .permission(PermissionLists.getAccessFineLocationPermission())
             .request(object : OnPermissionCallback {
@@ -409,9 +410,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                     deniedList: MutableList<IPermission>
                 ) {
                     if (deniedList.isEmpty()) {
-                        // 有权限，获取定位
                         locationManager.getAccurateLocation { location ->
-                            // 定位失败也继续发送：经纬度置空
                             val longitude = location?.longitude?.toString().orEmpty()
                             val latitude = location?.latitude?.toString().orEmpty()
 
@@ -421,7 +420,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
 
                             val sent = WebSocketManager.sendSOS(
                                 fromId = session.id.toString(),
-                                toId = null, // 后端按紧急联系人转发
+                                toId = null, //后端按紧急联系人转发
                                 longitude = longitude,
                                 latitude = latitude,
                                 time = System.currentTimeMillis().toString()
@@ -432,7 +431,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                                 return@getAccurateLocation
                             }
 
-                            // 无论定位是否成功，只要SOS发送成功就继续找紧急联系人拨号
                             viewLifecycleOwner.lifecycleScope.launch {
                                 try {
                                     val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
@@ -454,7 +452,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                             }
                         }
                     } else {
-                        // 无权限，发送空定位
                         showToast("无定位权限，已发送空定位")
                         val sent = WebSocketManager.sendSOS(
                             fromId = session.id.toString(),
@@ -464,7 +461,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                             time = System.currentTimeMillis().toString()
                         )
                         if (sent) {
-                            // 继续找紧急联系人拨号
                             viewLifecycleOwner.lifecycleScope.launch {
                                 try {
                                     val resp = UserRetrofitClient.instance.getFamilyInfo(session.id)
@@ -515,7 +511,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                     deniedList: MutableList<IPermission>
                 ) {
                     if (deniedList.isNotEmpty()) {
-                        // 无权限时降级到拨号盘，避免误报“获取失败”
                         startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$target")))
                         showToast("未授予通话权限，已打开拨号界面")
                         return
@@ -640,7 +635,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
             viewModel.clearRecognitionCache()
             requestAudioPermission()
             viewModel.startVoiceRecognition()
-            val result = kotlinx.coroutines.withTimeoutOrNull(5000) {
+            val result = kotlinx.coroutines.withTimeoutOrNull(10000) {
                 viewModel.recognitionResult.first{ it.isNotEmpty() && !it.contains("正在识别")&&it.contains("。")  }
             }
             viewModel.stopVoiceRecognition()
