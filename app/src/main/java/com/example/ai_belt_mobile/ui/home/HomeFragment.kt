@@ -23,6 +23,7 @@ import com.example.ai_belt_mobile.R
 import com.example.ai_belt_mobile.base.BaseFragment
 import com.example.ai_belt_mobile.databinding.FragmentHomeBinding
 import com.example.ai_belt_mobile.ui.fragment.DeviceScanDialogFragment
+import com.example.ai_belt_mobile.ui.fragment.HotspotInputDialogFragment
 
 import com.google.android.material.card.MaterialCardView
 import com.hjq.permissions.OnPermissionCallback
@@ -50,7 +51,8 @@ import kotlin.concurrent.thread
 import kotlin.text.get
 import kotlin.toString
 
-class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragment.Callbacks {
+class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragment.Callbacks,
+    HotspotInputDialogFragment.HotspotInputListener {
 
     override val layoutId: Int = R.layout.fragment_home
     private lateinit var viewModel: HomeViewModel
@@ -83,6 +85,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
         binding.viewModel = viewModel
         binding.lifecycleOwner = viewLifecycleOwner
 
+        requestInitialLocationPermissions() // Request initial location permissions at startup
         initVoiceView()
         initBleView()
         initNavigationView()
@@ -153,6 +156,27 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
         observeBleState()
         observeWsRequestAndReplyLocation()
         observeBleEmergency()
+        observeHotspotInputDialogRequest() // New: Observe requests to show hotspot input dialog
+    }
+
+    // New: HotspotInputDialogFragment.HotspotInputListener implementation
+    override fun onHotspotCredentialsEntered(ssid: String, password: String) {
+        Log.d("HomeFragment", "Hotspot credentials entered. SSID: $ssid, Password: ${"*".repeat(password.length)}")
+        viewModel.setHotspotCredentials(ssid, password)
+    }
+
+    // New: Observe requests to show hotspot input dialog
+    private fun observeHotspotInputDialogRequest() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.showHotspotInputDialog.collect {
+                    Log.d("HomeFragment", "Received request to show hotspot input dialog.")
+                    val dialog = HotspotInputDialogFragment()
+                    dialog.setHotspotInputListener(this@HomeFragment)
+                    dialog.show(childFragmentManager, HotspotInputDialogFragment.TAG)
+                }
+            }
+        }
     }
 
     // region 语音模块
@@ -249,6 +273,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                 false
             }
         }
+
+        root.findViewById<com.google.android.material.button.MaterialButton>(R.id.btn_change_hotspot).setOnClickListener {
+            viewModel.requestHotspotInputDialog()
+        }
     }
 
     private fun observeBleState() {
@@ -282,7 +310,10 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             arrayOf(
                 Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.BLUETOOTH_CONNECT
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.ACCESS_FINE_LOCATION// 蓝牙扫描也可能需要此权限
+             // Manifest.permission.ACCESS_COARSE_LOCATION
+              //  Manifest.permission.ACCESS_BACKGROUND_LOCATION
             )
         } else {
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -370,6 +401,25 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                 else -> false
             }
         }
+    }
+
+    private fun requestInitialLocationPermissions() {
+        XXPermissions.with(requireActivity())
+            .permission(PermissionLists.getAccessFineLocationPermission())
+            .permission(PermissionLists.getAccessCoarseLocationPermission())
+            .permission(PermissionLists.getAccessBackgroundLocationPermission())
+            .request(object : OnPermissionCallback {
+                override fun onResult(
+                    grantedList: MutableList<IPermission>,
+                    deniedList: MutableList<IPermission>
+                ) {
+                    if (deniedList.isNotEmpty()) {
+                        showToast("应用启动需要定位权限，部分功能可能受限")
+                    } else {
+                        Log.d("HomeFragment", "初始定位权限已全部授予")
+                    }
+                }
+            })
     }
 
     private fun startSosHold() {
@@ -567,14 +617,19 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
                                 }
 
                                 "ai_message" -> {
-                                    val msg = root.optJSONObject("data")?.optString("Message")
-                                        .orEmpty()
-                                        .ifBlank {
-                                            root.optJSONObject("data")?.optString("message")
-                                                .orEmpty()
-                                        }
+                                    // 首先尝试获取 data 字段（可能是字符串或JSON对象）
+                                    val dataObj = root.optJSONObject("data")
+                                    val msg = if (dataObj != null) {
+                                        // data 是 JSON 对象，尝试获取 Message 或 message 字段
+                                        dataObj.optString("Message").orEmpty()
+                                            .ifBlank { dataObj.optString("message").orEmpty() }
+                                    } else {
+                                        // data 是字符串，直接使用
+                                        root.optString("data").orEmpty()
+                                    }
 
                                     if (msg.isNotBlank()) {
+                                        Log.d("HomeFragment", "收到 ai_message，开始播报: $msg")
                                         SparkChainTTSManager.getInstance().speak(msg)
                                     } else {
                                         Log.w(
@@ -665,7 +720,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(), DeviceScanDialogFragme
             }
 
             viewModel.clearRecognitionCache()
-            viewModel.setEmergencyVoiceRecognition(false)
+
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.example.ai_belt_mobile
 
 import android.app.Application
+import android.util.Log
 import com.amap.api.navi.NaviSetting
 import com.amap.apis.utils.core.api.AMapUtilCoreApi
 import com.example.ai_belt_mobile.network.WebSocketManager
@@ -32,21 +33,24 @@ class AI_Belt_Application : Application() {
         // -------------------------------------------------------------
         
         // 初始化 SparkChain
-        val config = SparkChainConfig.builder()
-            .appID("7e61bc79")
-            .apiKey("b6b160d7fec7fdda0cccaa1e7b7ce6c2")
-            .apiSecret("NmVmOTcwYjYxY2VjNTBiYmIxOTQ1NWJl")
-
-        val ret = SparkChain.getInst().init(applicationContext, config)
-        if (ret == 0) {
-            println("SparkChain init success")
-        } else {
-            println("SparkChain init failed, error code: $ret")
-        }
-
-        SparkChainTTSManager.getInstance().init(applicationContext)
-
+        // 将耗时的SparkChain初始化移到后台协程，避免阻塞主线程，提高冷启动速度
         appScope.launch {
+            Log.d("AI_Belt_Application", "SparkChain 和 TTS 初始化开始 (后台)")
+            val config = SparkChainConfig.builder()
+                .appID("7e61bc79")
+                .apiKey("b6b160d7fec7fdda0cccaa1e7b7ce6c2")
+                .apiSecret("NmVmOTcwYjYxY2VjNTBiYmIxOTQ1NWJl")
+
+            val ret = SparkChain.getInst().init(applicationContext, config)
+            if (ret == 0) {
+                println("SparkChain init success")
+            } else {
+                println("SparkChain init failed, error code: $ret")
+            }
+
+            SparkChainTTSManager.getInstance().init(applicationContext)
+            Log.d("AI_Belt_Application", "SparkChain 和 TTS 初始化完成 (后台)")
+
             WebSocketManager.events.collect { event ->
                 if (event !is WsEvent.Message) return@collect
 

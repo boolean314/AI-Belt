@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import com.example.ai_belt_mobile.data.remote.AiResponse
 import kotlin.io.writeText
 import kotlin.text.get
@@ -83,11 +85,22 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val bleManager: BleManager by lazy {
         BleManager(getApplication<Application>().applicationContext, bleListener)
     }
+    private val bleWriteMutex = Mutex() // Mutex for serializing BLE writes
 
-    private val targetMac = "50:78:7D:15:9A:B1"
+    private val targetMac = "E0:72:A1:F3:E2:91"
 
     private val _bleEmergencyEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     val bleEmergencyEvents = _bleEmergencyEvents.asSharedFlow()
+
+    // Hotspot Credentials storage and UI event
+    private val PREFS_NAME = "HotspotPrefs"
+    private val KEY_HOTSPOT_SSID = "hotspot_ssid"
+    private val KEY_HOTSPOT_PASSWORD = "hotspot_password"
+
+    // Emits when the UI should show the hotspot input dialog
+    private val _showHotspotInputDialog = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val showHotspotInputDialog = _showHotspotInputDialog.asSharedFlow()
+
     // endregion
     
     // region 导航模块 - 状态与字段
@@ -167,7 +180,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                             }
                         }
 
-
+                        isEmergencyVoiceRecognition = false
 
                     }
                 }
@@ -298,11 +311,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         override fun onNotifyReady() {
-            sendCurrentDisabilityIdToBoard()
-            viewModelScope.launch {
-                kotlinx.coroutines.delay(120)
-                requestBattery()
-            }
+            // requestBattery() call removed from here to prevent collision with hotspot credentials
         }
 
         override fun onDisconnected() {
@@ -344,6 +353,78 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         override fun onError(msg: String) {
             _bleState.value = HomeBleState.Error(msg)
         }
+
+        override fun onRequestHotspotCredentials() {
+            Log.d("HomeViewModel", "BLEManager requested hotspot credentials (UI input).")
+            val appContext = getApplication<Application>().applicationContext
+            val prefs = appContext.getSharedPreferences(PREFS_NAME, Application.MODE_PRIVATE)
+            val storedSsid = prefs.getString(KEY_HOTSPOT_SSID, null)
+            val storedPassword = prefs.getString(KEY_HOTSPOT_PASSWORD, null)
+
+            if (storedSsid == null || storedPassword == null) {
+                Log.d("HomeViewModel", "No stored hotspot credentials found. Requesting user input.")
+                viewModelScope.launch {
+                    _showHotspotInputDialog.emit(Unit)
+                }
+            }
+            // 有存储凭据时，等待 onMtuReady 发送
+        }
+
+        override fun onMtuReady() {
+            Log.d("HomeViewModel", "MTU ready, sending hotspot credentials and user ID")
+            val appContext = getApplication<Application>().applicationContext
+            val prefs = appContext.getSharedPreferences(PREFS_NAME, Application.MODE_PRIVATE)
+            val storedSsid = prefs.getString(KEY_HOTSPOT_SSID, null)
+            val storedPassword = prefs.getString(KEY_HOTSPOT_PASSWORD, null)
+
+            if (storedSsid != null && storedPassword != null) {
+                Log.d("HomeViewModel", "Found stored hotspot credentials. Sending automatically.")
+                Log.d("HomeViewModel", "发送热点凭据: SSID=$storedSsid, Password=${storedPassword.replace(Regex("."), "*")}")
+                // 使用 Dispatchers.IO 确保在后台线程执行
+                viewModelScope.launch(Dispatchers.IO) {
+                    Log.d("HomeViewModel", "【onMtuReady】进入协程，准备获取锁")
+                    bleWriteMutex.withLock {
+                        Log.d("HomeViewModel", "【onMtuReady】获取锁成功")
+                        val hotspotSent = bleManager.sendHotspotCredentials(storedSsid, storedPassword)
+                        Log.d("HomeViewModel", "热点凭据发送结果: $hotspotSent")
+                        
+                        // 等待2秒后发送用户ID（无论热点凭据发送是否成功）
+                        Log.d("HomeViewModel", "【onMtuReady】等待2秒后发送用户ID...")
+                        kotlinx.coroutines.delay(2000)
+                        
+                        // 已持有锁，调用 alreadyLocked=true 版本避免死锁
+                        val idSent = sendCurrentDisabilityIdToBoard(true)
+                        Log.d("HomeViewModel", "用户ID发送结果: $idSent")
+                    }
+                }
+            } else {
+                Log.d("HomeViewModel", "No stored hotspot credentials, waiting for user input")
+            }
+        }
+    }
+
+    fun setHotspotCredentials(ssid: String, password: String) {
+        val appContext = getApplication<Application>().applicationContext
+        val prefs = appContext.getSharedPreferences(PREFS_NAME, Application.MODE_PRIVATE)
+        prefs.edit()
+            .putString(KEY_HOTSPOT_SSID, ssid)
+            .putString(KEY_HOTSPOT_PASSWORD, password)
+            .apply()
+        Log.d("HomeViewModel", "Hotspot credentials saved to SharedPreferences. Sending to BLE device.")
+        Log.d("HomeViewModel", "发送热点凭据: SSID=$ssid, Password=${password.replace(Regex("."), "*")}")
+        viewModelScope.launch {
+            bleWriteMutex.withLock {
+                bleManager.sendHotspotCredentials(ssid, password)
+                sendCurrentDisabilityIdToBoard()
+            }
+        }
+    }
+
+    // New method to explicitly request the hotspot input dialog
+    fun requestHotspotInputDialog() {
+        viewModelScope.launch {
+            _showHotspotInputDialog.emit(Unit)
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -365,25 +446,55 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun requestBattery() {
-        bleManager.write("BAT?\n".toByteArray())
+        Log.d("HomeViewModel", "请求电池信息: BAT?\n")
+        viewModelScope.launch { // Launch a coroutine for suspend call
+            bleWriteMutex.withLock {
+                bleManager.write("BAT?\n".toByteArray())
+            }
+        }
     }
 
-    private fun sendCurrentDisabilityIdToBoard() {
+    private suspend fun sendCurrentDisabilityIdToBoard(): Boolean {
+        return sendCurrentDisabilityIdToBoard(false)
+    }
+
+    private suspend fun sendCurrentDisabilityIdToBoard(alreadyLocked: Boolean): Boolean {
         val appContext = getApplication<Application>().applicationContext
         val session = UserSessionStore.get(appContext)
 
         if (session == null) {
-            Log.w("HomeViewModel", "发送残疾人ID失败：未登录会话")
-            return
+            Log.w("HomeViewModel", "【用户ID发送】失败：未登录会话，session=null")
+            return false
         }
+        
+        Log.d("HomeViewModel", "【用户ID发送】会话信息 - id=${session.id}, identity=${session.identity}, name=${session.name}, phone=${session.phone}")
+        
         if (session.identity != 0) {
-            Log.d("HomeViewModel", "当前不是残疾人端(identity=${session.identity})，跳过发送ID")
-            return
+            Log.d("HomeViewModel", "【用户ID发送】跳过：当前不是残疾人端(identity=${session.identity})")
+            return false
         }
 
-        val payload = "Id:${session.id}\n"
-        val status = sendOnCommand(payload)
-        Log.i("HomeViewModel", "发送给板子的内容: $payload, 已发送残疾人ID到板子: $status")
+        val payload = "id:${session.id}\n"
+        Log.d("HomeViewModel", "【用户ID发送】准备发送 - payload='$payload', 长度=${payload.length}")
+        
+        // 根据是否已持有锁决定是否再次获取锁
+        val result = if (alreadyLocked) {
+            Log.d("HomeViewModel", "【用户ID发送】已持有锁，直接调用 bleManager.writeText")
+            bleManager.writeText(payload)
+        } else {
+            bleWriteMutex.withLock {
+                Log.d("HomeViewModel", "【用户ID发送】获取锁成功，调用 bleManager.writeText")
+                bleManager.writeText(payload)
+            }
+        }
+        
+        Log.d("HomeViewModel", "【用户ID发送】发送结果 - success=$result, payload='$payload'")
+        
+        if (!result) {
+            Log.w("HomeViewModel", "【用户ID发送】警告：发送返回false，请检查BLE连接状态")
+        }
+        
+        return result
     }
 
     private fun parseBatteryText(text: String): Int? {
@@ -447,13 +558,19 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun sendOnCommand(text: String): Boolean {
-        val state = _bleState.value
-        if (state !is HomeBleState.Connected) return false
-        bleManager.writeText(text)
-        return true
+    suspend fun sendOnCommand(text: String): Boolean {
+        Log.d("HomeViewModel", "【sendOnCommand】开始发送指令 - text='$text', 长度=${text.length}")
+        
+        val result = bleWriteMutex.withLock {
+            Log.d("HomeViewModel", "【sendOnCommand】获取锁成功，调用 bleManager.writeText")
+            val writeResult = bleManager.writeText(text)
+            Log.d("HomeViewModel", "【sendOnCommand】bleManager.writeText 返回: $writeResult")
+            writeResult
+        }
+        
+        Log.d("HomeViewModel", "【sendOnCommand】发送完成 - result=$result, text='$text'")
+        return result
     }
-    // endregion
 
     // region 导航模块 - API
     fun initNavigation() {
@@ -462,7 +579,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             navigationManager.beltAngleFlow.collect { angle ->
                 if (angle > 30.0 || angle < -30.0) {
                     val angleString = "change:$angle"
-                    val sent = sendOnCommand(angleString)
+                    Log.d("HomeViewModel", "发送角度偏离数据到板子: $angleString")
+                    val sent = sendOnCommand(angleString) // sendOnCommand is now suspend
                     Log.i("HomeViewModel", "后台发送偏角数据: $angleString, 发送结果: $sent")
                 }
             }

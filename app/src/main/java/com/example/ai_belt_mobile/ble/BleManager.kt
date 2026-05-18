@@ -13,6 +13,9 @@ import java.util.UUID
 import kotlin.and
 import kotlin.toString
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
+
 class BleManager(
     context: Context,
     private val listener: Listener
@@ -24,12 +27,16 @@ class BleManager(
         fun onMessage(bytes: ByteArray)
         fun onError(msg: String)
         fun onNotifyReady() // 新增：CCCD写成功后通知上层
+        fun onRequestHotspotCredentials() // 新增：请求上层显示热点输入对话框
+        fun onMtuReady() // 新增：MTU协商完成后通知上层
     }
 
     private val adapter: BluetoothAdapter? =
         (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
     private val scanner: BluetoothLeScanner? get() = adapter?.bluetoothLeScanner
     private var gatt: BluetoothGatt? = null
+    private var pendingWrite: CompletableDeferred<Boolean>? = null
+    private var isMtuReady = false // 新增：MTU是否就绪
 
     companion object {
         val SERVICE_UUID: UUID = UUID.fromString("4fafc201-1fb5-459e-8fcc-c5c9c331914b")
@@ -73,6 +80,7 @@ class BleManager(
 
     @SuppressLint("MissingPermission")
     fun connect(device: BluetoothDevice, appContext: Context) {
+        isMtuReady = false // 重置MTU状态
         gatt = device.connectGatt(appContext, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
     }
 
@@ -85,28 +93,51 @@ class BleManager(
     }
 
     @SuppressLint("MissingPermission")
-    fun write(data: ByteArray) {
+    suspend fun write(data: ByteArray): Boolean {
+        Log.d("BleManager", "【write】开始写入数据，长度=${data.size}")
+        
         val g = gatt ?: run {
+            Log.e("BleManager", "【write】失败：gatt null")
             listener.onError("write failed: gatt null")
-            return
+            return false
         }
+        Log.d("BleManager", "【write】gatt 非空")
+        
         val service = g.getService(SERVICE_UUID) ?: run {
+            Log.e("BleManager", "【write】失败：service null, SERVICE_UUID=$SERVICE_UUID")
             listener.onError("write failed: service null")
-            return
+            return false
         }
+        Log.d("BleManager", "【write】找到服务: ${service.uuid}")
+        
         val ch = service.getCharacteristic(WRITE_UUID) ?: run {
+            Log.e("BleManager", "【write】失败：characteristic null, WRITE_UUID=$WRITE_UUID")
             listener.onError("write failed: char null")
-            return
+            return false
         }
+        Log.d("BleManager", "【write】找到特征: ${ch.uuid}")
+        
         ch.value = data
+        pendingWrite = CompletableDeferred()
         val ok = g.writeCharacteristic(ch)
-        Log.d("BLE_TX", "send=${data.toString(Charsets.UTF_8)} len=${data.size}, ok=$ok")
+        val textPreview = data.toString(Charsets.UTF_8).take(50)
+        Log.d("BleManager", "【write】调用 writeCharacteristic 返回: $ok, 数据预览='$textPreview', 长度=${data.size}")
+
+        return if (ok) {
+            Log.d("BleManager", "【write】等待 onCharacteristicWrite 回调...")
+            val result = withTimeoutOrNull(5000L) {
+                pendingWrite?.await() ?: false
+            } ?: false
+            Log.d("BleManager", "【write】等待完成，结果: $result")
+            result
+        } else {
+            Log.e("BleManager", "【write】writeCharacteristic 返回 false")
+            pendingWrite?.cancel()
+            false
+        }
     }
 
-    @SuppressLint("MissingPermission")
-    fun writeText(text: String) {
-        write(text.toByteArray(Charsets.UTF_8))
-    }
+
 
     private val gattCallback = object : BluetoothGattCallback() {
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -167,9 +198,27 @@ class BleManager(
             Log.d("BLE_SUB", "onDescriptorWrite uuid=${descriptor.uuid}, status=$status")
             if (descriptor.uuid == CCCD_UUID && status == BluetoothGatt.GATT_SUCCESS) {
                 listener.onNotifyReady()
+                // Request a larger MTU to prevent data truncation, credentials will be sent after MTU is ready
+                val mtuRequested = g.requestMtu(512)
+                Log.d("BLE_MTU", "requestMtu(512) called, result=$mtuRequested")
             } else if (descriptor.uuid == CCCD_UUID) {
                 listener.onError("CCCD write failed: $status")
             }
+        }
+
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+        override fun onMtuChanged(gatt: BluetoothGatt?, mtu: Int, status: Int) {
+            super.onMtuChanged(gatt, mtu, status)
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d("BLE_MTU", "MTU changed to $mtu")
+            } else {
+                Log.w("BLE_MTU", "Failed to change MTU to $mtu, status=$status")
+            }
+            // MTU协商完成（无论成功失败），通知上层可以发送凭据
+            isMtuReady = true
+            Log.d("BLE_MTU", "Calling listener.onMtuReady()")
+            listener.onMtuReady()
+            Log.d("BLE_MTU", "listener.onMtuReady() returned")
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
@@ -178,7 +227,36 @@ class BleManager(
             if (ch.uuid == NOTIFY_UUID) listener.onMessage(value)
         }
 
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+        override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            super.onCharacteristicWrite(gatt, characteristic, status)
+            Log.d("BLE_TX_CALLBACK", "onCharacteristicWrite uuid=${characteristic.uuid}, status=$status")
+            val success = status == BluetoothGatt.GATT_SUCCESS
+            pendingWrite?.complete(success)
+            pendingWrite = null
+            if (!success) {
+                listener.onError("writeCharacteristic failed: $status")
+            }
+        }
+    }
 
+    @SuppressLint("MissingPermission")
+    suspend fun writeText(text: String): Boolean {
+        val bytes = text.toByteArray(Charsets.UTF_8)
+        Log.d("BleManager", "【writeText】准备发送文本 - '$text', 字节长度=${bytes.size}")
+        val result = write(bytes)
+        Log.d("BleManager", "【writeText】发送结果 - success=$result, text='$text'")
+        return result
+    }
+
+    @SuppressLint("MissingPermission")
+    suspend fun sendHotspotCredentials(ssid: String, password: String): Boolean {
+        Log.d("BLE_HOTSPOT", "【sendHotspotCredentials】开始 - ssid=$ssid, password=${password.replace(Regex("."), "*")}")
+        val data = "WIFI:$ssid:$password"
+        Log.d("BLE_HOTSPOT", "【sendHotspotCredentials】数据: $data, 长度=${data.length}")
+        val result = writeText(data)
+        Log.d("BLE_HOTSPOT", "【sendHotspotCredentials】结果: $result")
+        return result
     }
 
     @SuppressLint("MissingPermission")

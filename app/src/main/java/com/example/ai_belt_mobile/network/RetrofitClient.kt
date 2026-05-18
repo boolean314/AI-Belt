@@ -12,10 +12,10 @@ import java.util.concurrent.TimeUnit
 object RetrofitClient {
 
     // 基础 URL，根据实际情况修改
-    private const val BASE_URL = "http://192.168.1.229:8080/"
+    private const val BASE_URL = "http://8.134.80.198:1092/"
 
     // 超时时间设置
-    private const val CONNECT_TIMEOUT = 30L // 连接超时时间，单位秒
+    private const val CONNECT_TIMEOUT = 30L // 连接超http://8.134.80.198:8899/时时间，单位秒
     private const val READ_TIMEOUT = 30L    // 读取超时时间，单位秒
     private const val WRITE_TIMEOUT = 30L   // 写入超时时间，单位秒
 

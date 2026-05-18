@@ -61,6 +61,17 @@
                     android:text="连接后可使用语音识别、语音播报、SOS求助等功能。"
                     android:textColor="#6B7280"
                     android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_change_hotspot"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="修改热点凭据"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:textColor="?attr/colorPrimary"
+                    app:strokeColor="?attr/colorPrimary"
+                    app:cornerRadius="8dp" />
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>
